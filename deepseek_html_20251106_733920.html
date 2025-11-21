@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D GTA - Исправленная версия</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            color: #fff;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        #game-canvas {
+            background: linear-gradient(to bottom, #4a6fa5, #87CEEB);
+            display: block;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            color: white;
+            font-size: 18px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 15px;
+            border-radius: 8px;
+        }
+        
+        #health-container {
+            margin-top: 8px;
+        }
+        
+        #health-bar {
+            width: 200px;
+            height: 20px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            border-radius: 10px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+        
+        #health-fill {
+            height: 100%;
+            width: 100%;
+            background: linear-gradient(to right, #4CAF50, #8BC34A);
+            border-radius: 6px;
+            transition: width 0.3s;
+        }
+        
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 20;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #ffcc00;
+            text-shadow: 0 0 10px rgba(255, 204, 0, 0.7);
+        }
+        
+        .controls {
+            display: flex;
+            gap: 30px;
+            margin: 20px 0;
+        }
+        
+        .control-group {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        button {
+            padding: 12px 30px;
+            font-size: 20px;
+            background: linear-gradient(to bottom, #ffcc00, #ff9900);
+            color: #1a1a2e;
+            border: none;
+            cursor: pointer;
+            margin-top: 20px;
+            border-radius: 50px;
+            font-weight: bold;
+            box-shadow: 0 4px 0 #cc7a00;
+            transition: all 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 0 #cc7a00;
+        }
+        
+        button:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 #cc7a00;
+        }
+        
+        #mini-map {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            width: 150px;
+            height: 150px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid white;
+            border-radius: 8px;
+            z-index: 10;
+        }
+        
+        .game-tip {
+            margin-top: 15px;
+            font-style: italic;
+            color: #ffcc00;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas" width="800" height="600"></canvas>
+        
+        <div id="ui">
+            <div>Очки: <span id="score">0</span></div>
+            <div id="health-container">
+                <div>Здоровье:</div>
+                <div id="health-bar">
+                    <div id="health-fill"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="mini-map"></div>
+        
+        <div id="start-screen">
+            <h1>2D GTA</h1>
+            <p>Гоняй по городу, собирай монеты и уклоняйся от врагов!</p>
+            
+            <div class="controls">
+                <div class="control-group">
+                    <h3>Управление</h3>
+                    <p>WASD или Стрелки - движение</p>
+                </div>
+                <div class="control-group">
+                    <h3>Цель игры</h3>
+                    <p>Собери как можно больше монет!</p>
+                    <p>Избегай столкновений с врагами!</p>
+                </div>
+            </div>
+            
+            <p class="game-tip">Совет: используй дороги для более быстрого перемещения!</p>
+            
+            <button id="start-button">Начать игру</button>
+        </div>
+    </div>
+
+    <script>
+        // Получаем элементы DOM
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const healthFill = document.getElementById('health-fill');
+        const startScreen = document.getElementById('start-screen');
+        const startButton = document.getElementById('start-button');
+        const miniMap = document.getElementById('mini-map');
+        const miniMapCtx = miniMap.getContext('2d');
+        
+        // Игровые переменные
+        let score = 0;
+        let health = 100;
+        let gameRunning = false;
+        let gameObjects = [];
+        let player;
+        
+        // Класс игрока
+        class Player {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 40;
+                this.height = 60;
+                this.speed = 0;
+                this.maxSpeed = 6;
+                this.acceleration = 0.2;
+                this.deceleration = 0.1;
+                this.steering = 0.05;
+                this.direction = 0; // в радианах
+                this.color = '#3498db';
+                this.wheelColor = '#2c3e50';
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.translate(this.x + this.width/2, this.y + this.height/2);
+                ctx.rotate(this.direction);
+                
+                // Кузов машины
+                ctx.fillStyle = this.color;
+                ctx.fillRect(-this.width/2, -this.height/2, this.width, this.height);
+                
+                // Верхняя часть машины
+                ctx.fillStyle = '#2980b9';
+                ctx.fillRect(-this.width/2 + 5, -this.height/2 + 5, this.width - 10, this.height/3);
+                
+                // Фары
+                ctx.fillStyle = '#f1c40f';
+                ctx.fillRect(-this.width/2 + 5, -this.height/2 + 5, 8, 5); // левая
+                ctx.fillRect(this.width/2 - 13, -this.height/2 + 5, 8, 5); // правая
+                
+                // Задние фонари
+                ctx.fillStyle = '#e74c3c';
+                ctx.fillRect(-this.width/2 + 5, this.height/2 - 10, 8, 5); // левый
+                ctx.fillRect(this.width/2 - 13, this.height/2 - 10, 8, 5); // правый
+                
+                // Колёса
+                ctx.fillStyle = this.wheelColor;
+                ctx.fillRect(-this.width/2 - 3, -this.height/4 - 3, 6, 12); // левое переднее
+                ctx.fillRect(this.width/2 - 3, -this.height/4 - 3, 6, 12); // правое переднее
+                ctx.fillRect(-this.width/2 - 3, this.height/4 - 9, 6, 12); // левое заднее
+                ctx.fillRect(this.width/2 - 3, this.height/4 - 9, 6, 12); // правое заднее
+                
+                ctx.restore();
+            }
+            
+            update(keys) {
+                // Ускорение и торможение
+                if (keys['ArrowUp'] || keys['w']) {
+                    this.speed += this.acceleration;
+                    if (this.speed > this.maxSpeed) this.speed = this.maxSpeed;
+                } else if (keys['ArrowDown'] || keys['s']) {
+                    this.speed -= this.acceleration;
+                    if (this.speed < -this.maxSpeed/2) this.speed = -this.maxSpeed/2;
+                } else {
+                    // Постепенное замедление
+                    if (this.speed > 0) {
+                        this.speed -= this.deceleration;
+                        if (this.speed < 0) this.speed = 0;
+                    } else if (this.speed < 0) {
+                        this.speed += this.deceleration;
+                        if (this.speed > 0) this.speed = 0;
+                    }
+                }
+                
+                // Поворот
+                if (keys['ArrowLeft'] || keys['a']) {
+                    this.direction -= this.steering * (Math.abs(this.speed) / this.maxSpeed);
+                }
+                if (keys['ArrowRight'] || keys['d']) {
+                    this.direction += this.steering * (Math.abs(this.speed) / this.maxSpeed);
+                }
+                
+                // Обновление позиции на основе скорости и направления
+                this.x += Math.cos(this.direction) * this.speed;
+                this.y += Math.sin(this.direction) * this.speed;
+                
+                // Ограничения по краям карты
+                if (this.x < 0) this.x = 0;
+                if (this.x > canvas.width - this.width) this.x = canvas.width - this.width;
+                if (this.y < 0) this.y = 0;
+                if (this.y > canvas.height - this.height) this.y = canvas.height - this.height;
+            }
+            
+            getBounds() {
+                return {
+                    x: this.x,
+                    y: this.y,
+                    width: this.width,
+                    height: this.height
+                };
+            }
+        }
+        
+        // Класс монеты
+        class Coin {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = 12;
+                this.color = '#FFD700';
+                this.glow = 0;
+                this.glowDirection = 1;
+            }
+            
+            draw() {
+                // Эффект свечения
+                this.glow += 0.05 * this.glowDirection;
+                if (this.glow > 1 || this.glow < 0) this.glowDirection *= -1;
+                
+                ctx.save();
+                
+                // Внешнее свечение
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius + 5, 0, Math.PI * 2);
+                const gradient = ctx.createRadialGradient(
+                    this.x, this.y, this.radius,
+                    this.x, this.y, this.radius + 5
+                );
+                gradient.addColorStop(0, `rgba(255, 215, 0, ${0.7 * this.glow})`);
+                gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
+                ctx.fillStyle = gradient;
+                ctx.fill();
+                
+                // Монета
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                
+                // Блеск монеты
+                ctx.beginPath();
+                ctx.arc(this.x - 3, this.y - 3, 4, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.fill();
+                
+                // Ободок монеты
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#D4AF37';
+                ctx.stroke();
+                
+                ctx.restore();
+            }
+            
+            getBounds() {
+                return {
+                    x: this.x - this.radius,
+                    y: this.y - this.radius,
+                    width: this.radius * 2,
+                    height: this.radius * 2
+                };
+            }
+        }
+        
+        // Класс врага
+        class Enemy {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.width = 40;
+                this.height = 60;
+                this.speed = 1.5 + Math.random() * 1.5;
+                this.color = '#e74c3c';
+                this.wheelColor = '#2c3e50';
+                this.direction = Math.random() * Math.PI * 2;
+                this.directionChangeTimer = 0;
+                this.targetX = x;
+                this.targetY = y;
+                this.setNewTarget();
+            }
+            
+            setNewTarget() {
+                this.targetX = Math.random() * (canvas.width - this.width);
+                this.targetY = Math.random() * (canvas.height - this.height);
+                this.directionChangeTimer = 100 + Math.random() * 100;
+            }
+            
+            draw() {
+                ctx.save();
+                ctx.translate(this.x + this.width/2, this.y + this.height/2);
+                ctx.rotate(this.direction);
+                
+                // Кузов машины
+                ctx.fillStyle = this.color;
+                ctx.fillRect(-this.width/2, -this.height/2, this.width, this.height);
+                
+                // Верхняя часть машины
+                ctx.fillStyle = '#c0392b';
+                ctx.fillRect(-this.width/2 + 5, -this.height/2 + 5, this.width - 10, this.height/3);
+                
+                // Фары
+                ctx.fillStyle = '#f1c40f';
+                ctx.fillRect(-this.width/2 + 5, -this.height/2 + 5, 8, 5); // левая
+                ctx.fillRect(this.width/2 - 13, -this.height/2 + 5, 8, 5); // правая
+                
+                // Задние фонари
+                ctx.fillStyle = '#ff6b6b';
+                ctx.fillRect(-this.width/2 + 5, this.height/2 - 10, 8, 5); // левый
+                ctx.fillRect(this.width/2 - 13, this.height/2 - 10, 8, 5); // правый
+                
+                // Колёса
+                ctx.fillStyle = this.wheelColor;
+                ctx.fillRect(-this.width/2 - 3, -this.height/4 - 3, 6, 12); // левое переднее
+                ctx.fillRect(this.width/2 - 3, -this.height/4 - 3, 6, 12); // правое переднее
+                ctx.fillRect(-this.width/2 - 3, this.height/4 - 9, 6, 12); // левое заднее
+                ctx.fillRect(this.width/2 - 3, this.height/4 - 9, 6, 12); // правое заднее
+                
+                ctx.restore();
+            }
+            
+            update() {
+                this.directionChangeTimer--;
+                
+                // Периодически меняем цель
+                if (this.directionChangeTimer <= 0 || 
+                    (Math.abs(this.x - this.targetX) < 10 && Math.abs(this.y - this.targetY) < 10)) {
+                    this.setNewTarget();
+                }
+                
+                // Вычисляем направление к цели
+                const dx = this.targetX - this.x;
+                const dy = this.targetY - this.y;
+                const targetDirection = Math.atan2(dy, dx);
+                
+                // Плавно поворачиваем к цели
+                let angleDiff = targetDirection - this.direction;
+                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+                
+                this.direction += angleDiff * 0.05;
+                
+                // Движение
+                this.x += Math.cos(this.direction) * this.speed;
+                this.y += Math.sin(this.direction) * this.speed;
+                
+                // Ограничения по краям карты
+                if (this.x < 0) {
+                    this.x = 0;
+                    this.direction = Math.PI - this.direction;
+                }
+                if (this.x > canvas.width - this.width) {
+                    this.x = canvas.width - this.width;
+                    this.direction = Math.PI - this.direction;
+                }
+                if (this.y < 0) {
+                    this.y = 0;
+                    this.direction = -this.direction;
+                }
+                if (this.y > canvas.height - this.height) {
+                    this.y = canvas.height - this.height;
+                    this.direction = -this.direction;
+                }
+            }
+            
+            getBounds() {
+                return {
+                    x: this.x,
+                    y: this.y,
+                    width: this.width,
+                    height: this.height
+                };
+            }
+        }
+        
+        // Класс здания
+        class Building {
+            constructor(x, y, width, height) {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.color = '#95a5a6';
+            }
+            
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                
+                // Рисуем окна
+                ctx.fillStyle = '#34495e';
+                const windowWidth = 15;
+                const windowHeight = 20;
+                const windowMargin = 10;
+                
+                for (let i = this.x + windowMargin; i < this.x + this.width - windowWidth; i += windowWidth + windowMargin) {
+                    for (let j = this.y + windowMargin; j < this.y + this.height - windowHeight; j += windowHeight + windowMargin) {
+                        ctx.fillRect(i, j, windowWidth, windowHeight);
+                    }
+                }
+                
+                // Тень здания
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.fillRect(this.x + 5, this.y + 5, this.width, this.height);
+            }
+            
+            getBounds() {
+                return {
+                    x: this.x,
+                    y: this.y,
+                    width: this.width,
+                    height: this.height
+                };
+            }
+        }
+        
+        // Класс дороги
+        class Road {
+            constructor(x, y, width, height, horizontal = true) {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.horizontal = horizontal;
+                this.color = '#2c3e50';
+            }
+            
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                
+                // Рисуем разметку
+                ctx.fillStyle = '#f1c40f';
+                if (this.horizontal) {
+                    const lineHeight = 5;
+                    const lineWidth = 20;
+                    const lineSpacing = 30;
+                    
+                    for (let i = this.x; i < this.x + this.width; i += lineWidth + lineSpacing) {
+                        ctx.fillRect(i, this.y + this.height/2 - lineHeight/2, lineWidth, lineHeight);
+                    }
+                } else {
+                    const lineWidth = 5;
+                    const lineHeight = 20;
+                    const lineSpacing = 30;
+                    
+                    for (let i = this.y; i < this.y + this.height; i += lineHeight + lineSpacing) {
+                        ctx.fillRect(this.x + this.width/2 - lineWidth/2, i, lineWidth, lineHeight);
+                    }
+                }
+            }
+        }
+        
+        // Функция проверки коллизий
+        function checkCollision(obj1, obj2) {
+            return obj1.x < obj2.x + obj2.width &&
+                   obj1.x + obj1.width > obj2.x &&
+                   obj1.y < obj2.y + obj2.height &&
+                   obj1.y + obj1.height > obj2.y;
+        }
+        
+        // Создание игрового мира
+        function createGameWorld() {
+            gameObjects = [];
+            
+            // Создаем здания
+            gameObjects.push(new Building(50, 50, 150, 200));
+            gameObjects.push(new Building(250, 100, 120, 180));
+            gameObjects.push(new Building(450, 70, 180, 220));
+            gameObjects.push(new Building(650, 50, 120, 150));
+            gameObjects.push(new Building(100, 350, 140, 190));
+            gameObjects.push(new Building(300, 400, 160, 170));
+            gameObjects.push(new Building(500, 350, 130, 200));
+            gameObjects.push(new Building(650, 400, 120, 180));
+            
+            // Создаем дороги
+            gameObjects.push(new Road(0, 300, 800, 40, true)); // Горизонтальная дорога
+            gameObjects.push(new Road(400, 0, 40, 600, false)); // Вертикальная дорога
+            
+            // Создаем монеты
+            for (let i = 0; i < 15; i++) {
+                let validPosition = false;
+                let x, y;
+                
+                while (!validPosition) {
+                    x = Math.random() * (canvas.width - 30);
+                    y = Math.random() * (canvas.height - 30);
+                    validPosition = true;
+                    
+                    // Проверяем, не пересекается ли монета со зданиями
+                    const coinBounds = {x: x-12, y: y-12, width: 24, height: 24};
+                    for (const obj of gameObjects) {
+                        if (obj instanceof Building && checkCollision(coinBounds, obj.getBounds())) {
+                            validPosition = false;
+                            break;
+                        }
+                    }
+                }
+                
+                gameObjects.push(new Coin(x, y));
+            }
+            
+            // Создаем врагов
+            for (let i = 0; i < 5; i++) {
+                let validPosition = false;
+                let x, y;
+                
+                while (!validPosition) {
+                    x = Math.random() * (canvas.width - 40);
+                    y = Math.random() * (canvas.height - 60);
+                    validPosition = true;
+                    
+                    // Проверяем, не пересекается ли враг со зданиями
+                    const enemyBounds = {x, y, width: 40, height: 60};
+                    for (const obj of gameObjects) {
+                        if (obj instanceof Building && checkCollision(enemyBounds, obj.getBounds())) {
+                            validPosition = false;
+                            break;
+                        }
+                    }
+                }
+                
+                gameObjects.push(new Enemy(x, y));
+            }
+        }
+        
+        // Инициализация игры
+        function initGame() {
+            // Создаем игрока в центре
+            player = new Player(canvas.width/2 - 20, canvas.height/2 - 30);
+            gameObjects.push(player);
+            
+            // Создаем игровой мир
+            createGameWorld();
+            
+            return player;
+        }
+        
+        // Отрисовка мини-карты
+        function drawMiniMap() {
+            miniMapCtx.clearRect(0, 0, miniMap.width, miniMap.height);
+            
+            // Фон мини-карты
+            miniMapCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            miniMapCtx.fillRect(0, 0, miniMap.width, miniMap.height);
+            
+            // Масштаб для мини-карты
+            const scaleX = miniMap.width / canvas.width;
+            const scaleY = miniMap.height / canvas.height;
+            
+            // Отрисовываем объекты на мини-карте
+            for (const obj of gameObjects) {
+                if (obj instanceof Building) {
+                    miniMapCtx.fillStyle = '#95a5a6';
+                    miniMapCtx.fillRect(
+                        obj.x * scaleX, 
+                        obj.y * scaleY, 
+                        obj.width * scaleX, 
+                        obj.height * scaleY
+                    );
+                } else if (obj instanceof Road) {
+                    miniMapCtx.fillStyle = '#2c3e50';
+                    miniMapCtx.fillRect(
+                        obj.x * scaleX, 
+                        obj.y * scaleY, 
+                        obj.width * scaleX, 
+                        obj.height * scaleY
+                    );
+                } else if (obj instanceof Coin) {
+                    miniMapCtx.fillStyle = '#FFD700';
+                    miniMapCtx.beginPath();
+                    miniMapCtx.arc(
+                        obj.x * scaleX, 
+                        obj.y * scaleY, 
+                        3, 0, Math.PI * 2
+                    );
+                    miniMapCtx.fill();
+                } else if (obj instanceof Enemy) {
+                    miniMapCtx.fillStyle = '#e74c3c';
+                    miniMapCtx.fillRect(
+                        obj.x * scaleX, 
+                        obj.y * scaleY, 
+                        4, 4
+                    );
+                } else if (obj instanceof Player) {
+                    miniMapCtx.fillStyle = '#3498db';
+                    miniMapCtx.fillRect(
+                        obj.x * scaleX, 
+                        obj.y * scaleY, 
+                        4, 4
+                    );
+                }
+            }
+            
+            // Рамка мини-карты
+            miniMapCtx.strokeStyle = 'white';
+            miniMapCtx.lineWidth = 2;
+            miniMapCtx.strokeRect(0, 0, miniMap.width, miniMap.height);
+        }
+        
+        // Основной игровой цикл
+        function gameLoop(keys) {
+            if (!gameRunning) return;
+            
+            // Очищаем canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Обновляем и рисуем все объекты
+            for (const obj of gameObjects) {
+                if (obj instanceof Player) {
+                    obj.update(keys);
+                } else if (obj instanceof Enemy) {
+                    obj.update();
+                }
+                obj.draw();
+            }
+            
+            // Проверяем коллизии
+            for (let i = 0; i < gameObjects.length; i++) {
+                const obj = gameObjects[i];
+                
+                // Коллизия игрока с монетами
+                if (obj instanceof Coin && checkCollision(player.getBounds(), obj.getBounds())) {
+                    gameObjects.splice(i, 1);
+                    score += 10;
+                    scoreElement.textContent = score;
+                    i--;
+                    
+                    // Создаем новую монету
+                    let validPosition = false;
+                    let x, y;
+                    
+                    while (!validPosition) {
+                        x = Math.random() * (canvas.width - 30);
+                        y = Math.random() * (canvas.height - 30);
+                        validPosition = true;
+                        
+                        // Проверяем, не пересекается ли монета со зданиями
+                        const coinBounds = {x: x-12, y: y-12, width: 24, height: 24};
+                        for (const gameObj of gameObjects) {
+                            if (gameObj instanceof Building && checkCollision(coinBounds, gameObj.getBounds())) {
+                                validPosition = false;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    gameObjects.push(new Coin(x, y));
+                }
+                
+                // Коллизия игрока с врагами
+                if (obj instanceof Enemy && checkCollision(player.getBounds(), obj.getBounds())) {
+                    health -= 2;
+                    healthFill.style.width = health + '%';
+                    
+                    if (health <= 0) {
+                        gameOver();
+                        return;
+                    }
+                }
+            }
+            
+            // Отрисовываем мини-карту
+            drawMiniMap();
+            
+            // Продолжаем игровой цикл
+            requestAnimationFrame(() => gameLoop(keys));
+        }
+        
+        // Функция завершения игры
+        function gameOver() {
+            gameRunning = false;
+            startScreen.style.display = 'flex';
+            startScreen.innerHTML = `
+                <h1>Игра окончена!</h1>
+                <p>Ваш счет: ${score}</p>
+                <button id="restart-button">Играть снова</button>
+            `;
+            
+            document.getElementById('restart-button').addEventListener('click', startGame);
+        }
+        
+        // Функция начала игры
+        function startGame() {
+            startScreen.style.display = 'none';
+            gameRunning = true;
+            score = 0;
+            health = 100;
+            scoreElement.textContent = score;
+            healthFill.style.width = health + '%';
+            
+            // Очищаем игровые объекты
+            gameObjects = [];
+            
+            // Инициализируем игру
+            initGame();
+            
+            // Запускаем игровой цикл
+            gameLoop(keys);
+        }
+        
+        // Обработка нажатий клавиш
+        const keys = {};
+        
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+        
+        // Запуск игры при нажатии кнопки
+        startButton.addEventListener('click', startGame);
+        
+        // Инициализация мини-карты
+        miniMap.width = miniMap.offsetWidth;
+        miniMap.height = miniMap.offsetHeight;
+    </script>
+</body>
+</html>

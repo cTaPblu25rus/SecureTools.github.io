@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureTools+ — 7 в 1 (2025)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Impact&display=swap" rel="stylesheet">
+    <style>
+        :root{--bg:#0f0f23;--card:rgba(255,255,255,0.08);--border:rgba(255,255,255,0.15);--text:#e0e7ff;--accent:#818cf8;--grad:linear-gradient(135deg,#818cf8,#c084fc,#f472b6)}
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+        canvas{position:fixed;top:0;left:0;z-index:-1}
+        .container{max-width:1100px;margin:0 auto;padding:40px 20px}
+        header{text-align:center;padding:80px 0 60px}
+        h1{font-size:4.5rem;font-weight:700;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .subtitle{font-size:1.4rem;opacity:0.9}
+        .tabs{display:flex;justify-content:center;flex-wrap:wrap;gap:12px;margin-bottom:50px}
+        .tab-btn{padding:14px 32px;background:rgba(255,255,255,0.08);border:1px solid var(--border);border-radius:50px;backdrop-filter:blur(12px);cursor:pointer;transition:.3s;font-weight:500}
+        .tab-btn:hover{background:rgba(129,140,248,0.2);border-color:var(--accent)}
+        .tab-btn.active{background:var(--accent);box-shadow:0 0 30px rgba(129,140,248,0.6);transform:translateY(-4px)}
+        .tab-content{display:none;background:var(--card);border-radius:28px;padding:40px;border:1px solid var(--border);backdrop-filter:blur(20px);box-shadow:0 20px 60px rgba(0,0,0,0.4)}
+        .tab-content.active{display:block;animation:fade .6s}
+        @keyframes fade{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}
+        .result{background:rgba(0,0,0,0.3);border-radius:20px;padding:32px;text-align:center;font-size:2.2rem;font-weight:600;margin:30px 0;min-height:120px;display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(10px);border:1px solid var(--border)}
+        .btn{background:var(--accent);border:none;padding:14px 28px;border-radius:16px;cursor:pointer;font-weight:600;transition:.3s}
+        .btn:hover{background:#6366f1;transform:translateY(-3px)}
+        .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px;margin:40px 0}
+        .card{background:rgba(255,255,255,0.05);padding:24px;border-radius:20px;border:1px solid var(--border);backdrop-filter:blur(10px)}
+        .btn-primary{width:100%;padding:20px;font-size:1.4rem;font-weight:600;background:var(--grad);border:none;border-radius:20px;color:white;cursor:pointer;transition:.4s}
+        .btn-primary:hover{transform:translateY(-6px);box-shadow:0 20px 40px rgba(129,140,248,0.4)}
+        .ad{margin:50px auto;text-align:center;max-width:360px}
+        .ad small{display:block;margin-bottom:12px;opacity:0.7}
+        .ad-box{background:#16213e;height:280px;border-radius:20px;display:flex;align-items:center;justify-content:center}
+        .preview{text-align:center;margin:40px 0}
+        .preview img{border-radius:50%;width:280px;height:280px;border:6px solid var(--accent);box-shadow:0 20px 40px rgba(0,0,0,0.5)}
+        .meme{position:relative;max-width:500px;margin:40px auto;border-radius:20px;overflow:hidden;box-shadow:0 20px 40px rgba(0,0,0,0.6)}
+        .meme img{width:100%}
+        .meme-text{position:absolute;left:0;right:0;padding:20px;text-align:center;font-family:'Impact',sans-serif;font-size:48px;color:white;text-transform:uppercase;text-shadow:5px 5px 0 #000;letter-spacing:2px}
+        .top{top:0}.bottom{bottom:0}
+        .quote-box{background:rgba(0,0,0,0.3);border-radius:20px;padding:50px 30px;text-align:center;font-size:1.8rem;font-style:italic;line-height:1.6;margin:40px 0;min-height:200px;display:flex;align-items:center;justify-content:center;flex-direction:column}
+        .quote-author{margin-top:20px;font-size:1.3rem;font-weight:bold;color:#c084fc}
+    </style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<div class="container">
+    <header>
+        <h1>SecureTools+</h1>
+        <p class="subtitle">7 мощных инструментов в одном месте — 2025 edition</p>
+    </header>
+
+    <div class="tabs">
+        <button class="tab-btn active" data-tab="pass">Пароли</button>
+        <button class="tab-btn" data-tab="nick">Ников</button>
+        <button class="tab-btn" data-tab="meme">Мемы</button>
+        <button class="tab-btn" data-tab="quote">Цитаты</button>
+        <button class="tab-btn" data-tab="phrase">Passphrase</button>
+        <button class="tab-btn" data-tab="avatar">Аватарки</button>
+        <button class="tab-btn" data-tab="stars">В звёздочки</button>
+    </div>
+
+    <!-- 1. Пароли -->
+    <div id="pass" class="tab-content active">
+        <div class="result"><span id="passResult">Нажми кнопку</span><button class="btn" onclick="copy('passResult')">Копировать</button></div>
+        <div class="grid">
+            <div class="card"><label>Длина: <strong id="lenVal">20</strong></label><input type="range" id="passLen" min="8" max="60" value="20" style="width:100%"></div>
+            <div class="card"><label><input type="checkbox" id="passUpper" checked> A-Z</label></div>
+            <div class="card"><label><input type="checkbox" id="passLower" checked> a-z</label></div>
+            <div class="card"><label><input type="checkbox" id="passNums" checked> 0-9</label></div>
+            <div class="card"><label><input type="checkbox" id="passSym" checked> Символы</label></div>
+        </div>
+        <div class="ad"><small>Реклама</small><div class="ad-box">336×280</div></div>
+        <button class="btn-primary" onclick="genPass()">Сгенерировать</button>
+    </div>
+
+    <!-- 2. Ников -->
+    <div id="nick" class="tab-content">
+        <div class="result"><span id="nickResult">Нажми кнопку</span><button class="btn" onclick="copy('nickResult')">Копировать</button></div>
+        <div class="grid">
+            <div class="card">
+                <label>Стиль:</label>
+                <select id="nickStyle" style="width:100%;padding:12px;margin-top:8px;border-radius:12px;background:rgba(255,255,255,0.1);color:white;border:none;">
+                    <option value="pro">ProPlayer ツ</option>
+                    <option value="dark">DarkAngel</option>
+                    <option value="cute">Kawaii ♡</option>
+                    <option value="cyber">Cyb3rN1nja</option>
+                    <option value="russian">Русский стиль</option>
+                </select>
+            </div>
+        </div>
+        <div class="ad"><small>Реклама</small><div class="ad-box">336×280</div></div>
+        <button class="btn-primary" onclick="genNick()">Сгенерировать ник</button>
+    </div>
+
+    <!-- 3. Мемы -->
+    <div id="meme" class="tab-content">
+        <div class="meme">
+            <img id="memeImg" src="https://i.imgflip.com/1g8my4.jpg">
+            <div class="meme-text top" id="memeTop">ВЕРХНИЙ ТЕКСТ</div>
+            <div class="meme-text bottom" id="memeBottom">НИЖНИЙ ТЕКСТ</div>
+        </div>
+        <div class="grid">
+            <div class="card">
+                <label>Шаблон:</label>
+                <select id="memeTemplate" onchange="changeMeme()" style="width:100%;padding:12px;margin-top:8px;border-radius:12px;background:rgba(255,255,255,0.1);color:white;border:none;">
+                    <option value="https://i.imgflip.com/1g8my4.jpg">Drake</option>
+                    <option value="https://i.imgflip.com/1ur9b0.jpg">Distracted Boyfriend</option>
+                    <option value="https://i.imgflip.com/1bij.jpg">Doge</option>
+                    <option value="https://i.imgflip.com/26jwoj.jpg">SpongeBob Mocking</option>
+                    <option value="https://i.imgflip.com/1otk96.jpg">Woman Yelling at Cat</option>
+                </select>
+            </div>
+            <div class="card"><label>Верх:</label><input type="text" id="topText" value="КОГДА СДАЛ ЭКЗАМЕН" style="width:100%;padding:12px;margin-top:8px;border-radius:12px;background:rgba(255,255,255,0.1);color:white;border:none;"></div>
+            <div class="card"><label>Низ:</label><input type="text" id="bottomText" value="А УЧИЛ НОЧЬЮ" style="width:100%;padding:12px;margin-top:8px;border-radius:12px;background:rgba(255,255,255,0.1);color:white;border:none;"></div>
+        </div>
+        <div class="ad"><small>Реклама</small><div class="ad-box">336×280</div></div>
+        <button class="btn-primary" onclick="updMeme()">Обновить мем</button>
+    </div>
+
+    <!-- 4. Цитаты -->
+    <div id="quote" class="tab-content">
+        <div class="quote-box">
+            <div id="quoteText">Нажми кнопку...</div>
+            <div class="quote-author" id="quoteAuthor"></div>
+        </div>
+        <div class="ad"><small>Реклама</small><div class="ad-box">336×280</div></div>
+        <button class="btn-primary" onclick="genQuote()">Новая цитата</button>
+    </div>
+
+    <!-- 5. Passphrase -->
+    <div id="phrase" class="tab-content">
+        <div class="result"><span id="phraseResult">Нажми кнопку</span><button class="btn" onclick="copy('phraseResult')">Копировать</button></div>
+        <div class="grid">
+            <div class="card"><label>Слов: <strong id="wordCount">4</strong></label><input type="range" id="wordsNum" min="3" max="8" value="4" style="width:100%"></div>
+            <div class="card"><label><input type="checkbox" id="phraseNums" checked> + Цифра</label></div>
+            <div class="card"><label><input type="checkbox" id="phraseSym" checked> + Символ</label></div>
+        </div>
+        <div class="ad"><small>Реклама</small><div class="ad-box">336×280</div></div>
+        <button class="btn-primary" onclick="genPhrase()">Сгенерировать</button>
+    </div>
+
+    <!-- 6. Аватарки -->
+    <div id="avatar" class="tab-content">
+        <div class="preview"><img id="avatarImg" src="https://robohash.org/user.png?size=256x256"></div>
+        <div class="grid">
+            <div class="card">
+                <label>Тип:</label>
+                <select id="avatarType" style="width:100%;padding:12px;margin-top:8px;border-radius:12px;background:rgba(255,255,255,0.1);color:white;border:none;">
+                    <option value="robohash">Роботы</option>
+                    <option value="cat">Котики</option>
+                    <option value="monster">Монстры</option>
+                    <option value="initials">Инициалы</option>
+                </select>
+            </div>
+            <div class="card"><label>Текст:</label><input type="text" id="avatarText" value="Gamer" style="width:100%;padding:12px;margin-top:8px;border-radius:12px;background:rgba(255,255,255,0.1);color:white;border:none;"></div>
+        </div>
+        <div class="ad"><small>Реклама</small><div class="ad-box">336×280</div></div>
+        <button class="btn-primary" onclick="genAvatar()">Сгенерировать</button>
+        <div style="text-align:center;margin-top:20px"><button class="btn" onclick="downloadAvatar()">Скачать</button></div>
+    </div>
+
+    <!-- 7. В звёздочки -->
+    <div id="stars" class="tab-content">
+        <textarea id="starsInput" placeholder="Вставь текст или пароль..." style="width:100%;height:140px;padding:18px;border-radius:16px;background:rgba(255,255,255,0.1);color:white;border:none;margin-bottom:20px;font-size:1.1rem;"></textarea>
+        <button class="btn-primary" onclick="toStars()">Преобразовать</button>
+        <div class="result" id="starsResult" style="margin-top:25px">Результат здесь</div>
+        <div class="ad"><small>Реклама</small><div class="ad-box">336×280</div></div>
+    </div>
+</div>
+
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
+canvas.width=innerWidth;canvas.height=innerHeight;
+let particles=[];
+for(let i=0;i<120;i++)particles.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,size:Math.random()*3+1,sx:Math.random()*1-0.5,sy:Math.random()*1-0.5});
+function anim(){ctx.clearRect(0,0,canvas.width,canvas.height);particles.forEach(p=>{p.x+=p.sx;p.y+=p.sy;if(p.x<0||p.x>canvas.width)p.sx*=-1;if(p.y<0||p.y>canvas.height)p.sy*=-1;ctx.fillStyle='rgba(129,140,248,0.6)';ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill()});requestAnimationFrame(anim)}anim();
+addEventListener('resize',()=>{canvas.width=innerWidth;canvas.height=innerHeight});
+
+// Вкладки
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.onclick=()=>{
+        document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.tab).classList.add('active');
+        if(btn.dataset.tab==='pass')genPass();
+        if(btn.dataset.tab==='nick')genNick();
+        if(btn.dataset.tab==='meme')updMeme();
+        if(btn.dataset.tab==='quote')genQuote();
+        if(btn.dataset.tab==='phrase')genPhrase();
+        if(btn.dataset.tab==='avatar')genAvatar();
+    }
+});
+
+// Ползунки
+document.getElementById('passLen').oninput=e=>document.getElementById('lenVal').textContent=e.target.value;
+document.getElementById('wordsNum').oninput=e=>document.getElementById('wordCount').textContent=e.target.value;
+
+// Пароли
+function genPass(){
+    let ch='';
+    if(document.getElementById('passLower').checked)ch+='abcdefghijklmnopqrstuvwxyz';
+    if(document.getElementById('passUpper').checked)ch+='ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    if(document.getElementById('passNums').checked)ch+ '0123456789';
+    if(document.getElementById('passSym').checked)ch+='!@#$%^&*()_+-=[]{}|;:,.<>?/~';
+    if(!ch){document.getElementById('passResult').textContent='Выбери символы';return}
+    const len=+document.getElementById('passLen').value;
+    const a=new Uint32Array(len);crypto.getRandomValues(a);
+    let r='';
+    for(let i=0;i<len;i++)r+=ch[a[i]%ch.length];
+    document.getElementById('passResult').textContent=r;
+}
+
+// Ников
+function genNick(){
+    const style=document.getElementById('nickStyle').value;
+    const templates={
+        pro:()=>`Pro${['Wolf','Ninja','Ghost','Sniper'][Math.floor(Math.random()*4)]}${Math.floor(Math.random()*999)}ツ`,
+        dark:()=>`Dark${['Angel','Demon','Soul'][Math.floor(Math.random()*3)]}${Math.floor(Math.random()*99)}`,
+        cute:()=>`${['Kawaii','Neko','Bunny'][Math.floor(Math.random()*3)]}♡${Math.floor(Math.random()*999)}`,
+        cyber:()=>`Cyb3r_${Math.floor(Math.random()*9999)}`,
+        russian:()=>`${['Бог','Топ','Легенда','Король'][Math.floor(Math.random()*4)]}_${Math.floor(Math.random()*9999)}`
+    };
+    document.getElementById('nickResult').textContent=templates[style]();
+}
+
+// Мемы
+function changeMeme(){document.getElementById('memeImg').src=document.getElementById('memeTemplate').value;updMeme()}
+function updMeme(){
+    document.getElementById('memeTop').textContent=(document.getElementById('topText').value||' ').toUpperCase();
+    document.getElementById('memeBottom').textContent=(document.getElementById('bottomText').value||' ').toUpperCase();
+}
+
+// Цитаты
+const quotes=[{t:"Будущее принадлежит тем, кто верит в красоту своей мечты.",a:"Элеонора Рузвельт"},{t:"Единственный способ делать отличную работу — любить то, что ты делаешь.",a:"Стив Джобс"},{t:"Живи так, будто умрёшь завтра. Учись так, будто будешь жить вечно.",a:"Ганди"}];
+function genQuote(){
+    const q=quotes[Math.floor(Math.random()*quotes.length)];
+    document.getElementById('quoteText').textContent='«'+q.t+'»';
+    document.getElementById('quoteAuthor').textContent='— '+q.a;
+}
+
+// Passphrase
+function genPhrase(){
+    const words=['correct','horse','battery','staple','quantum','dragon','castle','ocean','photon','velvet','crystal','thunder','echo','secret','mystic','apple','banana','rocket','laser','nebula'];
+    let p='';
+    const c=+document.getElementById('wordsNum').value;
+    for(let i=0;i<c;i++){p+=words[Math.floor(Math.random()*words.length)];if(i<c-1)p+='-'}
+    if(document.getElementById('phraseNums').checked)p+=Math.floor(Math.random()*99);
+    if(document.getElementById('phraseSym').checked)p+='!';
+    document.getElementById('phraseResult').textContent=p;
+}
+
+// Аватарки
+function genAvatar(){
+    const type=document.getElementById('avatarType').value;
+    const text=encodeURIComponent(document.getElementById('avatarText').value||'user');
+    let url='';
+    if(type==='robohash')url=`https://robohash.org/${text}.png?size=256x256`;
+    if(type==='cat')url=`https://robohash.org/${text}.png?size=256x256&set=set4`;
+    if(type==='monster')url=`https://robohash.org/${text}.png?size=256x256&set=set2`;
+    if(type==='initials')url=`https://ui-avatars.com/api/?name=${text}&size=256&background=random&color=fff`;
+    document.getElementById('avatarImg').src=url;
+}
+function downloadAvatar(){
+    const a=document.createElement('a');
+    a.href=document.getElementById('avatarImg').src;
+    a.download='avatar.png';
+    a.click();
+}
+
+// В звёздочки
+function toStars(){
+    const input=document.getElementById('starsInput').value.trim();
+    document.getElementById('starsResult').textContent=input?'•'.repeat(input.length)+` (${input.length} символов)`:'Введи текст';
+}
+
+// Копирование
+function copy(id){
+    navigator.clipboard.writeText(document.getElementById(id).textContent).then(()=>alert('Скопировано!'));
+}
+
+// Старт
+genPass();updMeme();genQuote();genAvatar();
+</script>
+</body>
+</html>
