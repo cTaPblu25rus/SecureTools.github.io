@@ -84,6 +84,12 @@ class Game {
 
   // ---------------- setup ----------------
   setupComposer() {
+    // Bloom renders into half-float targets; some mobile GPUs can't, which gives a black screen.
+    const ext = this.renderer.extensions;
+    this.noBloom = !(ext.has('EXT_color_buffer_float') || ext.has('EXT_color_buffer_half_float'));
+    this.probeFrames = 0;
+    this.canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); showFatal(t('glLost')); });
+    this.canvas.addEventListener('webglcontextrestored', () => location.reload());
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.8, 0.45, 0.32);
@@ -97,7 +103,7 @@ class Game {
     const dpr = window.devicePixelRatio || 1;
     const cap = q === 'low' ? 1 : q === 'med' ? 1.5 : 2;
     this.renderer.setPixelRatio(Math.min(dpr, cap) * (q === 'low' ? 0.8 : 1));
-    this.bloom.enabled = q !== 'low';
+    this.bloom.enabled = q !== 'low' && !this.noBloom;
     this.resize();
   }
   resize() {
@@ -645,8 +651,29 @@ class Game {
     this.bloom.strength = 0.75 + (boost ? 0.35 : 0);
     if (this.noRender) return;
     if (this.bloom.enabled) this.composer.render(dt); else this.renderer.render(this.scene, this.camera);
+    if (this.probeFrames >= 0 && ++this.probeFrames === 20) this.probeOutput();
 
     if (live && !CAPTURE) this.autoQuality(dt);
+  }
+
+  // Read back a few rows of the frame just drawn; an all-dark frame means the GPU
+  // failed the post-processing path, so fall back to direct rendering.
+  probeOutput() {
+    const gl = this.renderer.getContext();
+    const w = gl.drawingBufferWidth; const h = gl.drawingBufferHeight;
+    const row = new Uint8Array(w * 4);
+    let max = 0;
+    for (const f of [0.25, 0.4, 0.55, 0.7, 0.85]) {
+      gl.readPixels(0, Math.floor(h * f), w, 1, gl.RGBA, gl.UNSIGNED_BYTE, row);
+      for (let i = 0; i < row.length; i += 4) max = Math.max(max, row[i], row[i + 1], row[i + 2]);
+    }
+    if (max > 40) { this.probeFrames = -1; return; }
+    if (this.bloom.enabled) {
+      this.noBloom = true; this.applyQuality(); this.probeFrames = 0;
+    } else {
+      this.probeFrames = -1;
+      showFatal(t('glFail'));
+    }
   }
 
   autoQuality(dt) {
@@ -665,8 +692,25 @@ class Game {
 }
 
 // ---------------- boot ----------------
+function showFatal(msg) {
+  let el = document.getElementById('fatal');
+  if (!el) {
+    el = document.createElement('div'); el.id = 'fatal';
+    el.style.cssText = 'position:fixed;inset:auto 12px 12px 12px;z-index:99;background:#300010ee;color:#fff;border:1px solid #ff3b5c;border-radius:12px;padding:12px;font:13px/1.4 sans-serif;white-space:pre-wrap;max-height:40%;overflow:auto';
+    el.addEventListener('click', () => location.reload());
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+}
+window.addEventListener('error', (e) => showFatal((e.message || 'Error') + (e.filename ? '\n' + e.filename + ':' + e.lineno : '')));
+
 function boot() {
-  const game = new Game();
+  let game;
+  try { game = new Game(); } catch (e) {
+    document.getElementById('boot').classList.add('gone');
+    showFatal(t('glFail') + '\n\n' + (e && e.message));
+    return;
+  }
   window.__game = game;
   if (CAPTURE) {
     // Deterministic stepping hooks for the trailer recorder.
@@ -715,11 +759,15 @@ function boot() {
   }
   if (DEMO) game.startRun();
   let last = performance.now();
+  let failures = 0;
   const loop = (now) => {
-    const dt = Math.min(0.05, (now - last) / 1000);
-    last = now;
-    game.step(dt);
     requestAnimationFrame(loop);
+    const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
+    last = now;
+    try { game.step(dt); failures = 0; } catch (e) {
+      // keep running through a transient error, but surface a persistent one
+      if (++failures === 30) showFatal(String(e && e.stack || e));
+    }
   };
   requestAnimationFrame(loop);
 }

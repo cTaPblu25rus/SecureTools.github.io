@@ -32,6 +32,8 @@ const DICT = {
     shareText: 'Я пролетел {d} м и набрал {s} очков в NEON RIFT! Сможешь лучше?',
     notEnough: 'Не хватает кристаллов', bought: 'Куплено!', install: 'Установить',
     credits: 'Игра создана с помощью Claude',
+    glFail: 'Не удалось запустить 3D-графику на этом устройстве. Обновите Chrome / Android System WebView и перезапустите игру.',
+    glLost: 'Графика была сброшена системой. Нажмите здесь, чтобы перезапустить.',
     bestMark: 'РЕКОРД {d} м', meters: '{d} м!', beatBest: 'РЕКОРД ПОБИТ!',
   },
   en: {
@@ -67,6 +69,8 @@ const DICT = {
     shareText: 'I flew {d} m and scored {s} in NEON RIFT! Can you beat me?',
     notEnough: 'Not enough shards', bought: 'Purchased!', install: 'Install',
     credits: 'Game made with Claude',
+    glFail: 'Could not start 3D graphics on this device. Update Chrome / Android System WebView and restart.',
+    glLost: 'Graphics were reset by the system. Tap here to restart.',
     bestMark: 'BEST {d} m', meters: '{d} m!', beatBest: 'RECORD BROKEN!',
   },
 };
