@@ -1,0 +1,63 @@
+const DICT = {
+  ru: {
+    play: 'Играть', settings: 'Настройки', stats: 'Статистика', help: 'Как играть', back: 'Назад', start: 'В бой', resume: 'Продолжить', leave: 'Выйти в меню', rematch: 'Ещё матч', menu: 'Меню',
+    map: 'Карта', mode: 'Режим', team: 'Команда', bots: 'Ботов в команде', difficulty: 'Сложность ботов', rounds: 'Раундов до победы', ff: 'Огонь по своим',
+    mode_bomb: 'Закладка бомбы', mode_dm: 'Дезматч', mode_gg: 'Гонка вооружений',
+    mode_bomb_d: 'Террористы закладывают C4, спецназ защищает точки A и B', mode_dm_d: 'Мгновенное возрождение, свободный выбор оружия', mode_gg_d: 'Каждое убийство даёт новое оружие. Победа за убийство ножом',
+    team_auto: 'Авто', team_t: 'Террористы', team_ct: 'Спецназ', t: 'Террористы', ct: 'Спецназ', t_short: 'Т', ct_short: 'СН',
+    easy: 'Лёгкие', normal: 'Нормальные', hard: 'Сложные', expert: 'Эксперты', on: 'Вкл', off: 'Выкл',
+    lang: 'Язык', volume: 'Громкость', voice: 'Голос радио', sens: 'Чувствительность (экран)', mouseSens: 'Чувствительность (мышь)', fov: 'Поле зрения', quality: 'Графика', q_auto: 'Авто', q_low: 'Низкая', q_medium: 'Средняя', q_high: 'Высокая',
+    showFps: 'Показывать FPS', aimAssist: 'Помощь в прицеливании', autoFire: 'Автоогонь по цели', invertY: 'Инверсия по вертикали', btnScale: 'Размер кнопок', btnAlpha: 'Прозрачность кнопок', crosshair: 'Цвет прицела', vibrate: 'Вибрация', leftFire: 'Левая кнопка огня',
+    buy: 'Закупка', buy_pistols: 'Пистолеты', buy_heavy: 'Дробовик и ПП', buy_rifles: 'Винтовки', buy_gear: 'Снаряжение', buy_nades: 'Гранаты',
+    vest: 'Бронежилет', vesthelm: 'Бронежилет + шлем', kit: 'Набор сапёра', rebuy: 'Повторить', autobuy: 'Автозакупка', close: 'Закрыть',
+    buy_closed: 'Время закупки истекло', buy_zone: 'Закупка только в зоне возрождения', no_money: 'Недостаточно денег', team_only: 'Недоступно вашей команде', have_it: 'Уже есть',
+    money: 'Деньги', hp: 'Здоровье', armor: 'Броня', kills: 'Убийства', deaths: 'Смерти', score: 'Счёт', name: 'Игрок', alive: 'в живых', dead: 'убит', you: 'Вы',
+    round: 'Раунд', freeze: 'Закупка', bomb_planted: 'Бомба заложена!', bomb_defused: 'Бомба обезврежена', bomb_exploded: 'Цель уничтожена', t_win: 'Террористы победили', ct_win: 'Спецназ победил', draw: 'Ничья',
+    plant_hint: 'Удерживайте «Действие», чтобы заложить бомбу', defuse_hint: 'Удерживайте «Действие», чтобы обезвредить', have_bomb: 'У вас бомба — заложите её на точке A или B', bomb_dropped: 'Бомба выпала!', bomb_picked: 'Вы подобрали бомбу',
+    planting: 'Закладка…', defusing: 'Обезвреживание…', site: 'Точка', must_site: 'Бомбу можно заложить только на точке',
+    spectating: 'Наблюдение', you_died: 'Вы убиты', killed_by: 'Вас убил', respawn_in: 'Возрождение через', match_over: 'Матч окончен', victory: 'Победа!', defeat: 'Поражение', mvp: 'Лучший игрок', your_stats: 'Ваш результат',
+    accuracy: 'Точность', headshots: 'В голову', wins: 'Побед', losses: 'Поражений', matches: 'Матчей', plants: 'Закладок', defuses: 'Разминирований', playtime: 'Время в игре', kd: 'У/С', reset_stats: 'Сбросить',
+    pick_weapon: 'Выберите оружие', level: 'Уровень', leader: 'Лидер', time_left: 'Осталось', frag_limit: 'Лимит убийств',
+    reload: 'Перезарядка', jump: 'Прыжок', crouch: 'Присесть', use: 'Действие', scope: 'Прицел', drop: 'Бросить',
+    go: 'Вперёд, вперёд, вперёд!', r_planted: 'Бомба заложена', r_twin: 'Террористы победили', r_ctwin: 'Спецназ победил', r_defused: 'Бомба обезврежена', r_cover: 'Прикройте меня', r_enemy: 'Противник замечен', r_flash: 'Бросаю световую!', r_smoke: 'Ставлю дым!', r_he: 'Граната!',
+    tutorial_title: 'Управление',
+    help_text: '<b>Телефон:</b> левая половина экрана — движение (джойстик), правая — обзор. Кнопку огня можно вести пальцем, чтобы целиться во время стрельбы. Кнопки справа: прыжок, присесть, перезарядка, прицел. Снизу — выбор оружия, слева сверху — закупка ($) и счёт.<br><br><b>ПК:</b> WASD — движение, мышь — обзор, ЛКМ — огонь, ПКМ — прицел/удар ножом, R — перезарядка, Пробел — прыжок, Ctrl — присесть, Shift — тихий шаг, E — действие (заложить/обезвредить/подобрать), 1–5 — оружие, Q — прошлое оружие, G — бросить, B — закупка, Tab — счёт, Esc — пауза.<br><br><b>Закладка бомбы:</b> террористы должны заложить C4 на точке A или B и не дать её обезвредить. Спецназ побеждает, если уничтожит террористов, обезвредит бомбу или продержится до конца раунда. За победы, убийства и закладку начисляются деньги. Броня снижает урон, шлем защищает голову, набор сапёра ускоряет разминирование вдвое.',
+    loading: 'Загрузка…', paused: 'Пауза', fps: 'FPS', first_to: 'до {0} побед', bots_count: '{0} на {0}',
+    kill_reward: '+${0} за убийство', round_reward: '+${0}', hs: 'в голову', wallbang: 'сквозь стену', grenade: 'граната', bomb: 'бомба', fall: 'падение', suicide: 'самоубийство',
+  },
+  en: {
+    play: 'Play', settings: 'Settings', stats: 'Stats', help: 'How to play', back: 'Back', start: 'Deploy', resume: 'Resume', leave: 'Quit to menu', rematch: 'Rematch', menu: 'Menu',
+    map: 'Map', mode: 'Mode', team: 'Team', bots: 'Bots per team', difficulty: 'Bot skill', rounds: 'Rounds to win', ff: 'Friendly fire',
+    mode_bomb: 'Bomb defusal', mode_dm: 'Deathmatch', mode_gg: 'Arms race',
+    mode_bomb_d: 'Terrorists plant C4, counter-terrorists defend sites A and B', mode_dm_d: 'Instant respawn, free weapon choice', mode_gg_d: 'Every kill upgrades your weapon. Win with a knife kill',
+    team_auto: 'Auto', team_t: 'Terrorists', team_ct: 'Counter-Terrorists', t: 'Terrorists', ct: 'Counter-Terrorists', t_short: 'T', ct_short: 'CT',
+    easy: 'Easy', normal: 'Normal', hard: 'Hard', expert: 'Expert', on: 'On', off: 'Off',
+    lang: 'Language', volume: 'Volume', voice: 'Radio voice', sens: 'Touch sensitivity', mouseSens: 'Mouse sensitivity', fov: 'Field of view', quality: 'Graphics', q_auto: 'Auto', q_low: 'Low', q_medium: 'Medium', q_high: 'High',
+    showFps: 'Show FPS', aimAssist: 'Aim assist', autoFire: 'Auto-fire on target', invertY: 'Invert Y', btnScale: 'Button size', btnAlpha: 'Button opacity', crosshair: 'Crosshair color', vibrate: 'Vibration', leftFire: 'Left fire button',
+    buy: 'Buy', buy_pistols: 'Pistols', buy_heavy: 'Shotgun & SMG', buy_rifles: 'Rifles', buy_gear: 'Equipment', buy_nades: 'Grenades',
+    vest: 'Kevlar', vesthelm: 'Kevlar + helmet', kit: 'Defuse kit', rebuy: 'Rebuy', autobuy: 'Autobuy', close: 'Close',
+    buy_closed: 'Buy time is over', buy_zone: 'You can only buy in the spawn zone', no_money: 'Not enough money', team_only: 'Not available for your team', have_it: 'Already owned',
+    money: 'Money', hp: 'Health', armor: 'Armor', kills: 'Kills', deaths: 'Deaths', score: 'Score', name: 'Player', alive: 'alive', dead: 'dead', you: 'You',
+    round: 'Round', freeze: 'Buy time', bomb_planted: 'Bomb has been planted!', bomb_defused: 'Bomb defused', bomb_exploded: 'Target destroyed', t_win: 'Terrorists win', ct_win: 'Counter-Terrorists win', draw: 'Round draw',
+    plant_hint: 'Hold “Use” to plant the bomb', defuse_hint: 'Hold “Use” to defuse', have_bomb: 'You have the bomb: plant it at site A or B', bomb_dropped: 'The bomb has been dropped!', bomb_picked: 'You picked up the bomb',
+    planting: 'Planting…', defusing: 'Defusing…', site: 'Site', must_site: 'The bomb must be planted at a bomb site',
+    spectating: 'Spectating', you_died: 'You were killed', killed_by: 'Killed by', respawn_in: 'Respawn in', match_over: 'Match over', victory: 'Victory!', defeat: 'Defeat', mvp: 'MVP', your_stats: 'Your result',
+    accuracy: 'Accuracy', headshots: 'Headshots', wins: 'Wins', losses: 'Losses', matches: 'Matches', plants: 'Plants', defuses: 'Defuses', playtime: 'Time played', kd: 'K/D', reset_stats: 'Reset',
+    pick_weapon: 'Choose a weapon', level: 'Level', leader: 'Leader', time_left: 'Time left', frag_limit: 'Frag limit',
+    reload: 'Reload', jump: 'Jump', crouch: 'Crouch', use: 'Use', scope: 'Scope', drop: 'Drop',
+    go: 'Go, go, go!', r_planted: 'Bomb has been planted', r_twin: 'Terrorists win', r_ctwin: 'Counter-terrorists win', r_defused: 'Bomb has been defused', r_cover: 'Cover me', r_enemy: 'Enemy spotted', r_flash: 'Flashbang out!', r_smoke: 'Smoke out!', r_he: 'Fire in the hole!',
+    tutorial_title: 'Controls',
+    help_text: '<b>Phone:</b> left half of the screen moves (joystick), right half looks around. Drag the fire button to aim while shooting. Right-side buttons: jump, crouch, reload, scope. Weapons are at the bottom, buy ($) and score at the top left.<br><br><b>PC:</b> WASD move, mouse look, LMB fire, RMB scope / knife stab, R reload, Space jump, Ctrl crouch, Shift walk quietly, E use (plant/defuse/pick up), 1–5 weapons, Q last weapon, G drop, B buy, Tab score, Esc pause.<br><br><b>Bomb defusal:</b> terrorists plant C4 at site A or B and protect it. Counter-terrorists win by eliminating the terrorists, defusing the bomb or running out the clock. Wins, kills and plants earn money. Kevlar reduces damage, a helmet protects the head, the defuse kit halves defuse time.',
+    loading: 'Loading…', paused: 'Paused', fps: 'FPS', first_to: 'first to {0}', bots_count: '{0} vs {0}',
+    kill_reward: '+${0} for the kill', round_reward: '+${0}', hs: 'headshot', wallbang: 'wallbang', grenade: 'grenade', bomb: 'bomb', fall: 'fall', suicide: 'suicide',
+  },
+};
+
+let lang = 'ru';
+export function setLang(l) { lang = DICT[l] ? l : 'ru'; }
+export function getLang() { return lang; }
+export function t(key, ...args) {
+  let s = (DICT[lang] && DICT[lang][key]) ?? DICT.ru[key] ?? key;
+  args.forEach((a, i) => { s = s.split('{' + i + '}').join(a); });
+  return s;
+}

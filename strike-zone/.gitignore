@@ -1,0 +1,5 @@
+node_modules/
+android/debug.keystore
+*.idsig
+tests/out/
+tests/_*.mjs

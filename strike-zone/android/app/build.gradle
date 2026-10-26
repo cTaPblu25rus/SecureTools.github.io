@@ -1,0 +1,41 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.strikezone.game'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.strikezone.game'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+    }
+
+    signingConfigs {
+        release {
+            // Provide these via environment (CI secrets) to produce a store-ready build.
+            def ks = System.getenv('SZ_KEYSTORE')
+            if (ks) {
+                storeFile file(ks)
+                storePassword System.getenv('SZ_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('SZ_KEY_ALIAS')
+                keyPassword System.getenv('SZ_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig System.getenv('SZ_KEYSTORE') ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}

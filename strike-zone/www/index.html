@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#121418">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="description" content="STRIKE ZONE — тактический 3D-шутер: закладка бомбы, дезматч, гонка вооружений, боты.">
+<title>STRIKE ZONE</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hud" class="hidden">
+  <canvas id="radar" width="200" height="200"></canvas>
+  <div id="top">
+    <div class="team t"><b id="scoreT">0</b><span id="aliveT"></span></div>
+    <div id="timerBox"><div id="timer">1:55</div><div id="roundInfo"></div></div>
+    <div class="team ct"><b id="scoreCT">0</b><span id="aliveCT"></span></div>
+  </div>
+  <div id="killfeed"></div>
+  <div id="chat"></div>
+  <div id="msg"></div>
+  <div id="hint"></div>
+  <div id="cross"><i class="l"></i><i class="r"></i><i class="u"></i><i class="d"></i><b></b></div>
+  <div id="hitmark"><i></i><i></i><i></i><i></i></div>
+  <div id="dmgdirs"></div>
+  <div id="hpbox"><span class="ico">✚</span><b id="hp">100</b><span class="ico shield">⛉</span><b id="armor">0</b><span id="gearIcons"></span></div>
+  <div id="ammobox"><div id="wname"></div><b id="clip">0</b><span class="sep">|</span><b id="reserve">0</b></div>
+  <div id="moneybox"><span class="dol">$</span><b id="money">800</b><span id="moneyDelta"></span></div>
+  <div id="progress"><span id="progText"></span><div id="progBar"><div id="progFill"></div></div></div>
+  <div id="spec"></div>
+  <div id="fps"></div>
+  <div id="scope"><div class="ring"></div><i class="h"></i><i class="v"></i></div>
+  <div id="smokeOv"></div>
+  <div id="hurtOv"></div>
+  <div id="flashOv"></div>
+
+  <div id="touch">
+    <div id="joy"><div id="joyKnob"></div></div>
+    <div id="slots"></div>
+    <div class="tbtn" id="bFire" data-act="fire"><span>●</span></div>
+    <div class="tbtn" id="bFire2" data-act="fire2"><span>●</span></div>
+    <div class="tbtn sm" id="bJump" data-act="jump"><span>⤒</span></div>
+    <div class="tbtn sm" id="bCrouch" data-act="crouch"><span>⤓</span></div>
+    <div class="tbtn sm" id="bReload" data-act="reload"><span>↻</span></div>
+    <div class="tbtn sm" id="bScope" data-act="scope"><span>⊕</span></div>
+    <div class="tbtn sm" id="bUse" data-act="use"><span>✋</span></div>
+    <div class="tbtn sm" id="bDrop" data-act="drop"><span>⇣</span></div>
+    <div class="tbtn mini" id="bBuy" data-act="buy"><span>$</span></div>
+    <div class="tbtn mini" id="bScore" data-act="score"><span>☰</span></div>
+    <div class="tbtn mini" id="bMenu" data-act="menu"><span>❚❚</span></div>
+  </div>
+</div>
+
+<div id="buy" class="panel hidden"></div>
+<div id="board" class="panel hidden"></div>
+
+<div id="menu" class="screen">
+  <div class="logo"><span class="l1">STRIKE</span><span class="l2">ZONE</span></div>
+  <div class="tag" id="menuTag"></div>
+  <div class="menuBtns">
+    <button class="big" data-go="setup" data-t="play"></button>
+    <button data-go="settings" data-t="settings"></button>
+    <button data-go="stats" data-t="stats"></button>
+    <button data-go="help" data-t="help"></button>
+  </div>
+  <div class="ver">v1.0</div>
+</div>
+
+<div id="setup" class="screen hidden"></div>
+<div id="settings" class="screen hidden"></div>
+<div id="stats" class="screen hidden"></div>
+<div id="help" class="screen hidden"></div>
+<div id="pause" class="screen hidden"></div>
+<div id="matchEnd" class="screen hidden"></div>
+<div id="loading" class="screen hidden"><div class="spinner"></div><div data-t="loading"></div></div>
+<div id="rotate"><div class="phone"></div><div>⟲</div></div>
+
+<script src="game.js"></script>
+<script>
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(function () {});
+</script>
+</body>
+</html>
