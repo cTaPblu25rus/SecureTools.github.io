@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#07021a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="NEON RIFT — 3D-раннер в бесконечном неоновом туннеле. Вращайся на 360°, прыгай, собирай кристаллы.">
+<title>NEON RIFT</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="c"></canvas>
+
+  <div id="hud" class="hidden">
+    <div class="hud-top">
+      <div class="hud-score">
+        <div id="hScore" class="num">0</div>
+        <div id="hDist" class="sub">0 m</div>
+      </div>
+      <div class="hud-right">
+        <div class="pill"><i class="gem"></i><span id="hShards">0</span></div>
+        <button id="btnPause" class="icon-btn" aria-label="pause"><span></span><span></span></button>
+      </div>
+    </div>
+    <div id="hCombo" class="combo"><span id="hMult">x1</span><div class="bar"><i id="hComboBar"></i></div></div>
+    <div id="hPowers" class="powers"></div>
+    <div id="hBiome" class="biome-banner"></div>
+    <div id="hHint" class="hint"></div>
+    <div id="pops"></div>
+  </div>
+
+  <div id="toasts"></div>
+
+  <!-- MENU -->
+  <section id="sMenu" class="screen">
+    <div class="menu-top">
+      <div class="pill big"><i class="gem"></i><span class="js-shards">0</span></div>
+      <button class="icon-btn round" data-go="sSettings" aria-label="settings">⚙</button>
+    </div>
+    <div class="logo"><span>NEON</span><b>RIFT</b></div>
+    <div class="tagline" data-t="tagline"></div>
+    <div class="menu-bottom">
+      <div class="best"><span data-t="best"></span> <b class="js-best">0</b></div>
+      <button id="btnPlay" class="btn primary huge" data-t="play"></button>
+      <div class="menu-row">
+        <button class="btn tile" data-go="sShop"><i>🚀</i><span data-t="shop"></span></button>
+        <button class="btn tile" data-go="sMissions"><i>🎯</i><span data-t="missions"></span><em class="badge js-mbadge"></em></button>
+        <button class="btn tile" data-go="sRecords"><i>🏆</i><span data-t="records"></span></button>
+      </div>
+      <button id="btnInstall" class="btn ghost small hidden" data-t="install"></button>
+    </div>
+  </section>
+
+  <!-- SHOP / HANGAR -->
+  <section id="sShop" class="screen panel-screen">
+    <header><button class="icon-btn round" data-back>‹</button><h2 data-t="shop"></h2><div class="pill"><i class="gem"></i><span class="js-shards">0</span></div></header>
+    <div class="tabs"><button class="tab active" data-tab="ships" data-t="ships"></button><button class="tab" data-tab="upgrades" data-t="upgrades"></button></div>
+    <div class="shop-preview"></div>
+    <div id="shopList" class="list"></div>
+  </section>
+
+  <!-- MISSIONS -->
+  <section id="sMissions" class="screen panel-screen">
+    <header><button class="icon-btn round" data-back>‹</button><h2 data-t="missions"></h2><div class="pill"><i class="gem"></i><span class="js-shards">0</span></div></header>
+    <div id="missionList" class="list"></div>
+  </section>
+
+  <!-- RECORDS -->
+  <section id="sRecords" class="screen panel-screen">
+    <header><button class="icon-btn round" data-back>‹</button><h2 data-t="records"></h2><span></span></header>
+    <div id="statsBox" class="stats"></div>
+    <div id="recordList" class="list"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="sSettings" class="screen panel-screen">
+    <header><button class="icon-btn round" data-back>‹</button><h2 data-t="settings"></h2><span></span></header>
+    <div class="list settings">
+      <label class="row"><span data-t="music"></span><input type="range" min="0" max="1" step="0.05" id="setMusic"></label>
+      <label class="row"><span data-t="sfx"></span><input type="range" min="0" max="1" step="0.05" id="setSfx"></label>
+      <label class="row"><span data-t="sensitivity"></span><input type="range" min="0.4" max="2" step="0.05" id="setSens"></label>
+      <div class="row"><span data-t="controls"></span><div class="seg" id="setControls"><button data-v="swipe" data-t="c_swipe"></button><button data-v="tilt" data-t="c_tilt"></button></div></div>
+      <div class="row"><span data-t="quality"></span><div class="seg" id="setQuality"><button data-v="auto">AUTO</button><button data-v="low" data-t="q_low"></button><button data-v="med" data-t="q_med"></button><button data-v="high" data-t="q_high"></button></div></div>
+      <div class="row"><span data-t="vibration"></span><div class="seg" id="setVib"><button data-v="1" data-t="on"></button><button data-v="0" data-t="off"></button></div></div>
+      <div class="row"><span data-t="language"></span><div class="seg" id="setLang"><button data-v="ru">RU</button><button data-v="en">EN</button></div></div>
+      <button id="btnReset" class="btn danger small" data-t="reset"></button>
+      <p class="credits">NEON RIFT v1.0 · <span data-t="credits"></span></p>
+    </div>
+  </section>
+
+  <!-- PAUSE -->
+  <section id="sPause" class="screen modal">
+    <div class="card">
+      <h2 data-t="paused"></h2>
+      <button id="btnResume" class="btn primary" data-t="resume"></button>
+      <button id="btnRestartP" class="btn" data-t="restart"></button>
+      <button id="btnMenuP" class="btn ghost" data-t="menu"></button>
+    </div>
+  </section>
+
+  <!-- GAME OVER -->
+  <section id="sOver" class="screen modal">
+    <div class="card">
+      <h2 class="over-title" data-t="gameover"></h2>
+      <div id="overBest" class="newbest hidden" data-t="newBest"></div>
+      <div class="over-score" id="overScore">0</div>
+      <div class="over-grid">
+        <div><small data-t="distance"></small><b id="overDist">0</b></div>
+        <div><small data-t="shards"></small><b id="overShards">0</b></div>
+        <div><small data-t="best"></small><b id="overBestVal">0</b></div>
+      </div>
+      <div id="overMissions" class="over-missions"></div>
+      <button id="btnRevive" class="btn revive"><span data-t="revive"></span> <i class="gem"></i><b id="reviveCost"></b><div class="revive-timer"><i></i></div></button>
+      <button id="btnRestart" class="btn primary" data-t="restart"></button>
+      <div class="menu-row two">
+        <button id="btnMenuO" class="btn ghost" data-t="menu"></button>
+        <button id="btnShare" class="btn ghost" data-t="share"></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- DAILY -->
+  <section id="sDaily" class="screen modal">
+    <div class="card">
+      <h2 data-t="daily"></h2>
+      <div id="dailyDays" class="daily-days"></div>
+      <button id="btnDaily" class="btn primary" data-t="take"></button>
+    </div>
+  </section>
+
+  <div id="caption" class="caption hidden"></div>
+  <div id="flash"></div>
+  <div id="boot"><div class="logo small"><span>NEON</span><b>RIFT</b></div><div class="loader"></div></div>
+</div>
+<script src="game.js"></script>
+</body>
+</html>

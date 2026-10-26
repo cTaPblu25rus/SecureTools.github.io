@@ -1,0 +1,16 @@
+{
+  "name": "NEON RIFT",
+  "short_name": "NEON RIFT",
+  "description": "3D-раннер в бесконечном неоновом туннеле",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#07021a",
+  "theme_color": "#07021a",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

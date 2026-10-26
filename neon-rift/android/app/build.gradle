@@ -1,0 +1,41 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.neonrift.game'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.neonrift.game'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+    }
+
+    signingConfigs {
+        release {
+            // Provide these via environment (CI secrets) to produce a store-ready build.
+            def ks = System.getenv('NR_KEYSTORE')
+            if (ks) {
+                storeFile file(ks)
+                storePassword System.getenv('NR_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('NR_KEY_ALIAS')
+                keyPassword System.getenv('NR_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig System.getenv('NR_KEYSTORE') ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
