@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Color;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Vibrator;
@@ -17,9 +18,22 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import org.json.JSONObject;
+
+import java.util.List;
+
 /** Hosts the WebGL game (assets/www) in a fullscreen WebView. */
 public class MainActivity extends Activity {
     private WebView web;
+    private LanServer lan;
+    private final LanDiscovery discovery = new LanDiscovery();
+    private WifiManager.MulticastLock multicastLock;
+
+    /** Calls a JS function with one string argument on the UI thread. */
+    private void callJs(final String fn, final String arg) {
+        final String js = "window." + fn + " && window." + fn + "(" + JSONObject.quote(arg) + ")";
+        web.post(new Runnable() { public void run() { web.evaluateJavascript(js, null); } });
+    }
 
     /** Exposed to JS as window.AndroidBridge. */
     public class Bridge {
@@ -34,6 +48,87 @@ public class MainActivity extends Activity {
         public void exit() {
             runOnUiThread(new Runnable() { public void run() { finish(); } });
         }
+
+        // ---------- LAN play ----------
+
+        /** Starts hosting; returns this device's IPs ("ip1,ip2") or "ERR" when the port is unavailable. */
+        @JavascriptInterface
+        public String netHost(int port) {
+            netStop();
+            try {
+                lan = new LanServer(port, new LanServer.Listener() {
+                    public void onOpen(int id, String address) { callJs("__lanEvent", "O" + id + "|" + address); }
+                    public void onMessage(int id, String text) { callJs("__lanEvent", "M" + id + "|" + text); }
+                    public void onClose(int id) { callJs("__lanEvent", "C" + id); }
+                });
+                lan.start();
+            } catch (Exception e) {
+                lan = null;
+                return "ERR";
+            }
+            final LanServer server = lan;
+            discovery.startBeacon(new LanDiscovery.InfoSource() {
+                public String info() { return server.getBeaconInfo(); }
+            });
+            return netLocalIps();
+        }
+
+        @JavascriptInterface
+        public void netStop() {
+            discovery.stopBeacon();
+            if (lan != null) { lan.stop(); lan = null; }
+        }
+
+        @JavascriptInterface
+        public void netSend(int id, String text) { if (lan != null) lan.send(id, text); }
+
+        @JavascriptInterface
+        public void netBroadcast(String text) { if (lan != null) lan.broadcast(text); }
+
+        @JavascriptInterface
+        public void netKick(int id) { if (lan != null) lan.kick(id); }
+
+        @JavascriptInterface
+        public void netInfo(String info) { if (lan != null) lan.setBeaconInfo(info); }
+
+        /** Starts or stops listening for games on the local network. */
+        @JavascriptInterface
+        public void netDiscover(boolean on) {
+            if (on) {
+                lockMulticast(true);
+                discovery.startListening(new LanDiscovery.Listener() {
+                    public void onFound(String ip, String info) { callJs("__lanFound", ip + "|" + info); }
+                });
+            } else {
+                discovery.stopListening();
+                lockMulticast(false);
+            }
+        }
+
+        @JavascriptInterface
+        public String netLocalIps() {
+            List<String> ips = LanDiscovery.localIps();
+            StringBuilder sb = new StringBuilder();
+            for (String ip : ips) { if (sb.length() > 0) sb.append(','); sb.append(ip); }
+            return sb.toString();
+        }
+    }
+
+    // Some phones drop broadcast packets unless a multicast lock is held.
+    private void lockMulticast(boolean on) {
+        try {
+            if (on) {
+                if (multicastLock == null) {
+                    WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                    if (wm == null) return;
+                    multicastLock = wm.createMulticastLock("strikezone-lan");
+                    multicastLock.setReferenceCounted(false);
+                }
+                multicastLock.acquire();
+            } else if (multicastLock != null && multicastLock.isHeld()) {
+                multicastLock.release();
+            }
+        } catch (Exception ignored) { }
     }
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
@@ -120,6 +215,10 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        discovery.stopBeacon();
+        discovery.stopListening();
+        lockMulticast(false);
+        if (lan != null) lan.stop();
         if (web != null) web.destroy();
         super.onDestroy();
     }

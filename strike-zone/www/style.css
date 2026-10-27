@@ -231,3 +231,26 @@ input[type=range] { width: 100%; accent-color: var(--hud); height: 4vmin; }
 .form { width: min(1100px, 94vw); }
 .seg button { min-width: 0; white-space: nowrap; }
 .maps .mapc canvas { aspect-ratio: 2.2; }
+
+/* LAN screens */
+.lanBox { width: min(620px, 94vw); display: flex; flex-direction: column; gap: 1.6vmin; }
+.lanBox input, .joinRow input { width: 100%; padding: 1.2vmin 1.4vmin; font-size: 2.4vmin; border-radius: 8px; border: 1px solid var(--line); background: rgba(0,0,0,0.4); color: #fff; user-select: text; -webkit-user-select: text; }
+.lanBox button.big { padding: 1.6vmin; font-size: 2.8vmin; border-radius: 10px; background: var(--hud); color: #111; border: 1px solid var(--hud); font-weight: 800; cursor: pointer; }
+.lanBox button.big:disabled { opacity: 0.35; }
+.joinRow { display: flex; gap: 1vmin; }
+.joinRow button { padding: 1.2vmin 2.4vmin; border-radius: 8px; border: 1px solid var(--line); background: rgba(255,255,255,0.1); font-size: 2.2vmin; white-space: nowrap; cursor: pointer; }
+.found { display: flex; flex-direction: column; gap: 0.8vmin; }
+.found .game { text-align: left; padding: 1.2vmin 1.6vmin; border-radius: 8px; border: 1px solid var(--hud); background: rgba(255,192,74,0.12); cursor: pointer; font-size: 2.2vmin; }
+.found .game span { display: block; font-size: 1.8vmin; opacity: 0.8; }
+.note { font-size: 1.9vmin; opacity: 0.75; }
+.err { color: #ff7a6a; font-size: 2.2vmin; min-height: 2.4vmin; }
+.lobbyInfo { font-size: 2.3vmin; opacity: 0.85; margin-bottom: 1vmin; text-align: center; }
+.addr { font-size: 2.6vmin; margin-bottom: 1.4vmin; } .addr b { color: var(--hud); }
+.lobbyTable { border-collapse: collapse; min-width: min(560px, 90vw); font-size: 2.3vmin; margin-bottom: 1.4vmin; }
+.lobbyTable th { text-align: left; opacity: 0.6; font-weight: 500; padding: 0.4vmin 1vmin; }
+.lobbyTable td { padding: 0.7vmin 1vmin; border-top: 1px solid var(--line); }
+.lobbyTable tr.me td { background: rgba(255,192,74,0.14); }
+.lobbyTable td.t { color: var(--t); } .lobbyTable td.ct { color: var(--ct); }
+.badge { font-size: 0.75em; background: var(--hud); color: #111; border-radius: 4px; padding: 0 5px; margin-left: 4px; }
+#lobbyTeam { width: min(560px, 90vw); }
+#lobby .actions { align-items: center; }

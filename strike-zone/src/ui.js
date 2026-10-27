@@ -9,6 +9,7 @@ import { audio } from './audio.js';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const SHORT = { knife: '🔪', bomb: 'C4', he: 'HE', fall: '↓', flash: 'FB', smoke: 'SG' };
+const SCREENS = ['menu', 'setup', 'settings', 'stats', 'help', 'pause', 'matchEnd', 'loading', 'lan', 'lobby'];
 const CROSS = { green: '#4dff6a', white: '#ffffff', yellow: '#ffe14a', cyan: '#4af0ff', red: '#ff4a4a' };
 
 function weaponLabel(k) { return SHORT[k] && k !== 'he' ? SHORT[k] : (WEAPONS[k] ? WEAPONS[k].name : k); }
@@ -65,15 +66,17 @@ export class UI {
 
   // ---------- screens ----------
   show(name) {
-    for (const id of ['menu', 'setup', 'settings', 'stats', 'help', 'pause', 'matchEnd', 'loading']) $(id).classList.toggle('hidden', id !== name);
+    for (const id of SCREENS) $(id).classList.toggle('hidden', id !== name);
     this.screen = name;
+    if (name === 'lan') this.buildLan();
+    if (name === 'lobby') this.buildLobby();
     if (name === 'setup') this.buildSetup();
     if (name === 'settings') this.buildSettings();
     if (name === 'stats') this.buildStats();
     if (name === 'help') this.buildHelp();
     if (name === 'pause') this.buildPause();
   }
-  hideScreens() { for (const id of ['menu', 'setup', 'settings', 'stats', 'help', 'pause', 'matchEnd', 'loading']) $(id).classList.add('hidden'); this.screen = null; }
+  hideScreens() { for (const id of SCREENS) $(id).classList.add('hidden'); this.screen = null; }
 
   bindMenu() {
     document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => { audio.init(); audio.play('click'); this.settingsBack = 'menu'; this.show(b.dataset.go); }));
@@ -113,7 +116,10 @@ export class UI {
   buildSetup() {
     const S = store.setup;
     const el = $('setup');
-    el.innerHTML = `<h1>${t('play')}</h1><div class="form"></div><div class="actions"><button data-a="back">${t('back')}</button><button class="prim" data-a="start">${t('start')}</button></div>`;
+    const lan = this.setupFor === 'lan' || this.setupFor === 'lanEdit';
+    const title = lan ? t('lan_title') : t('play');
+    const startLabel = this.setupFor === 'lan' ? t('create_lobby') : this.setupFor === 'lanEdit' ? t('save') : t('start');
+    el.innerHTML = `<h1>${title}</h1><div class="form"></div><div class="actions"><button data-a="back">${t('back')}</button><button class="prim" data-a="start">${startLabel}</button></div>`;
     const form = el.querySelector('.form');
     const mapsField = document.createElement('div');
     mapsField.className = 'field full';
@@ -145,8 +151,97 @@ export class UI {
       form.appendChild(this.seg(t('rounds'), [3, 5, 8, 10, 16].map((n) => [n, String(n)]), S.rounds, (v) => { S.rounds = v; }));
       form.appendChild(this.seg(t('ff'), [[false, t('off')], [true, t('on')]], S.ff, (v) => { S.ff = v; }));
     }
-    el.querySelector('[data-a=back]').addEventListener('click', () => { audio.play('click'); store.save(); this.show('menu'); });
-    el.querySelector('[data-a=start]').addEventListener('click', () => { audio.init(); audio.play('click'); store.save(); this.h.onStart({ ...S }); });
+    el.querySelector('[data-a=back]').addEventListener('click', () => { audio.play('click'); store.save(); this.show(this.setupFor === 'lan' ? 'lan' : this.setupFor === 'lanEdit' ? 'lobby' : 'menu'); });
+    el.querySelector('[data-a=start]').addEventListener('click', () => {
+      audio.init(); audio.play('click'); store.save();
+      if (this.setupFor === 'lan') this.h.onLanCreate({ ...S });
+      else if (this.setupFor === 'lanEdit') this.h.onLanSetup({ ...S });
+      else this.h.onStart({ ...S });
+    });
+  }
+
+  // ---------- LAN ----------
+  buildLan() {
+    this.h.onLanOpen();
+    const el = $('lan');
+    const S = store.settings;
+    const host = this.h.canHost();
+    el.innerHTML = `<h1>${t('lan_title')}</h1>
+      <div class="lanBox">
+        <div class="field"><label>${t('your_name')}</label><input id="lanName" maxlength="16" value="${esc(S.name || '')}"></div>
+        <button class="prim big" data-a="host" ${host ? '' : 'disabled'}>${t('create_game')}</button>
+        ${host ? '' : `<div class="note">${t('lan_web_hint')}</div>`}
+        <div class="field"><label>${t('found_games')}</label><div id="lanFound" class="found"></div></div>
+        <div class="field"><label>${t('join_ip')}</label><div class="joinRow"><input id="lanIp" placeholder="192.168.0.10" value="${esc(S.lastIp || this.h.defaultIp() || '')}" inputmode="decimal"><button data-a="join">${t('join')}</button></div></div>
+        <div class="note">${t('lan_hint')}</div>
+        <div id="lanErr" class="err"></div>
+      </div>
+      <div class="actions"><button data-a="back">${t('back')}</button></div>`;
+    const name = () => { const v = $('lanName').value.trim(); S.name = v; store.save(); return v || t('you'); };
+    el.querySelector('[data-a=back]').addEventListener('click', () => { audio.play('click'); this.h.onLanBack(); });
+    el.querySelector('[data-a=host]').addEventListener('click', () => { audio.init(); audio.play('click'); name(); this.setupFor = 'lan'; this.show('setup'); });
+    el.querySelector('[data-a=join]').addEventListener('click', () => {
+      audio.init(); audio.play('click');
+      const ip = $('lanIp').value.trim();
+      S.lastIp = ip; store.save();
+      this.h.onLanJoin(ip, name());
+    });
+    this.renderFound();
+  }
+
+  setFound(list) { this.found = list; if (this.screen === 'lan') this.renderFound(); }
+
+  renderFound() {
+    const box = $('lanFound');
+    if (!box) return;
+    const list = this.found || [];
+    if (!list.length) { box.innerHTML = `<div class="note">${this.h.canDiscover() ? t('searching') : t('no_discovery')}</div>`; return; }
+    box.innerHTML = list.map((g, i) => {
+      const m = MAPS.find((x) => x.id === g.info.m);
+      const map = m ? (m.name[getLang()] || m.name.ru) : '';
+      return `<button class="game" data-i="${i}"><b>${esc(g.info.n || g.ip)}</b><span>${esc(map)} · ${esc(t('mode_' + (g.info.md || 'bomb')))} · ${t('players_n', g.info.p || 1)}${g.info.g ? ' · ' + t('in_progress') : ''}</span></button>`;
+    }).join('');
+    box.querySelectorAll('[data-i]').forEach((b) => b.addEventListener('click', () => {
+      audio.init(); audio.play('click');
+      const g = list[Number(b.dataset.i)];
+      const v = $('lanName').value.trim(); store.settings.name = v; store.save();
+      this.h.onLanJoin(g.ip, v || t('you'));
+    }));
+  }
+
+  lanError(key) {
+    if (this.screen !== 'lan') this.show('lan');
+    const e = $('lanErr');
+    if (e) e.textContent = t(key);
+  }
+
+  setLobby(st, me) { this.lobby = st; this.lobbyMe = me; if (this.screen === 'lobby') this.buildLobby(); }
+
+  buildLobby() {
+    const el = $('lobby');
+    const st = this.lobby;
+    if (!st) { el.innerHTML = `<h1>${t('lobby')}</h1><div class="spinner"></div><div class="note">${t('connecting')}</div><div class="actions"><button data-a="leave">${t('leave_lobby')}</button></div>`; el.querySelector('[data-a=leave]').addEventListener('click', () => this.h.onLobbyLeave()); return; }
+    const isHost = this.lobbyMe === 0;
+    const S = st.setup;
+    const m = MAPS.find((x) => x.id === S.map);
+    const teamName = (tm) => (tm === 't' ? t('team_t') : tm === 'ct' ? t('team_ct') : t('team_auto'));
+    const rows = st.players.map((p) => `<tr class="${p.id === this.lobbyMe ? 'me' : ''}"><td>${esc(p.name)}${p.host ? ' <span class="badge">' + t('host') + '</span>' : ''}</td><td class="${p.team === 't' ? 't' : p.team === 'ct' ? 'ct' : ''}">${teamName(p.team)}</td></tr>`).join('');
+    const mine = st.players.find((p) => p.id === this.lobbyMe);
+    el.innerHTML = `<h1>${t('lobby')}</h1>
+      <div class="lobbyInfo">${esc(m ? (m.name[getLang()] || m.name.ru) : S.map)} · ${t('mode_' + S.mode)} · ${t(S.diff)} · ${t('bots')}: ${S.bots}×${S.bots}${S.mode === 'bomb' ? ' · ' + t('first_to', S.rounds) : ''}</div>
+      ${isHost && st.ips && st.ips.length ? `<div class="addr">${t('address')}: <b>${st.ips.map(esc).join(', ')}</b></div>` : ''}
+      <table class="lobbyTable"><tr><th>${t('players')}</th><th>${t('team')}</th></tr>${rows}</table>
+      <div id="lobbyTeam"></div>
+      ${st.inGame && !isHost ? `<div class="note">${t('joining_match')}</div>` : ''}
+      <div class="actions"><button data-a="leave">${t('leave_lobby')}</button>${isHost ? `<button data-a="edit">${t('edit_setup')}</button><button class="prim" data-a="start">${t('start_match')}</button>` : `<span class="note">${t('waiting_host')}</span>`}</div>`;
+    if (S.mode !== 'gg') {
+      $('lobbyTeam').appendChild(this.seg(t('team'), [['auto', t('team_auto')], ['t', t('team_t')], ['ct', t('team_ct')]], mine ? mine.team : 'auto', (v) => this.h.onLobbyTeam(v)));
+    }
+    el.querySelector('[data-a=leave]').addEventListener('click', () => { audio.play('click'); this.h.onLobbyLeave(); });
+    if (isHost) {
+      el.querySelector('[data-a=edit]').addEventListener('click', () => { audio.play('click'); Object.assign(store.setup, S); this.setupFor = 'lanEdit'; this.show('setup'); });
+      el.querySelector('[data-a=start]').addEventListener('click', () => { audio.init(); audio.play('click'); this.h.onLobbyStart(); });
+    }
   }
 
   buildSettings() {
@@ -334,9 +429,12 @@ export class UI {
     const sc = isGG ? `${t('leader')}: ${esc(r.winnerActor ? r.winnerActor.name : '')}` : `<span class="t">${r.score[0]}</span> : <span class="ct">${r.score[1]}</span>`;
     el.innerHTML = `<div class="res ${r.won ? 'win' : 'lose'}">${title}</div><div class="sc">${sc}</div>
       <table><tr><th>${t('name')}</th><th>${t('kills')}</th><th>${t('deaths')}</th><th>${t('headshots')}</th><th>DMG</th>${G.mode === 'bomb' ? '<th>MVP</th>' : ''}</tr>${rows}</table>
-      <div class="actions"><button data-a="menu">${t('menu')}</button><button class="prim" data-a="again">${t('rematch')}</button></div>`;
+      <div class="actions"><button data-a="menu">${t(G.role === 'solo' ? 'menu' : 'leave_lobby')}</button>${G.role === 'host' ? `<button data-a="lobby">${t('lobby')}</button>` : ''}${G.role === 'client' ? `<span class="note">${t('waiting_host')}</span>` : `<button class="prim" data-a="again">${t('rematch')}</button>`}</div>`;
     el.querySelector('[data-a=menu]').addEventListener('click', () => { audio.play('click'); this.h.onLeave(); });
-    el.querySelector('[data-a=again]').addEventListener('click', () => { audio.play('click'); this.h.onRematch(); });
+    const again = el.querySelector('[data-a=again]');
+    if (again) again.addEventListener('click', () => { audio.play('click'); this.h.onRematch(); });
+    const lob = el.querySelector('[data-a=lobby]');
+    if (lob) lob.addEventListener('click', () => { audio.play('click'); this.h.onToLobby(); });
     setTimeout(() => { if (this.G === G) { this.closeBuy(); $('board').classList.add('hidden'); this.show('matchEnd'); this.h.onMatchScreen(); } }, 2500);
     store.save();
   }

@@ -51,6 +51,7 @@ async function uiTest() {
   await tap(page, '#setup [data-a=start]');
   await page.waitForTimeout(2500);
   if (!(await page.locator('#hud').isVisible())) fail('HUD visible in match'); else ok('HUD visible in match');
+  await page.evaluate(() => { const G = window.__game(); for (const a of G.actors) if (a.brain) a.brain.think = () => ({ wx: 0, wz: 0 }); });
   if (shots) await page.screenshot({ path: join(out, 'ingame.png') });
   // Buy menu during freeze time.
   await tap(page, '#bBuy');

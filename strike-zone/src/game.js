@@ -4,7 +4,8 @@ import { TEAM, PHYS, RULES, WEAPONS, GEAR, GUNGAME, BOT_NAMES } from './config.j
 import { Grid, CELL, mulberry32 } from './grid.js';
 import { Actor, makeWeapon, modelKey } from './actor.js';
 import { BotBrain } from './bot.js';
-import { updateWeapon, updateGrenades, damage } from './combat.js';
+import { updateWeapon, updateGrenades, damage, remoteAttack } from './combat.js';
+import { handleEvent } from './events.js';
 import { lossBonus } from './rules.js';
 import { buildCharacter, buildGun, setCharacterGun, animateCharacter } from './models.js';
 import { softSprite } from './textures.js';
@@ -14,7 +15,11 @@ import { t } from './i18n.js';
 const DM_WEAPONS = ['ak47', 'm4a1', 'awp', 'mp5', 'p90', 'm3', 'galil', 'famas', 'scout', 'deagle'];
 
 export class Game {
-  constructor({ def, scene, fx, ui, setup, playerName, autopilot = false, seed = Date.now() }) {
+  constructor({ def, scene, fx, ui, setup, playerName, autopilot = false, seed = Date.now(), role = 'solo', humans = [], roster = null, youId = null }) {
+    this.role = role;
+    this.net = null;
+    this.outAtk = [];
+    this.nextObjId = 1;
     this.def = def;
     this.grid = new Grid(def);
     this.scene = scene;
@@ -42,25 +47,66 @@ export class Game {
     this.radioT = new Map();
     this.shakeAmt = 0;
     this.matchTime = 0;
-    this.createActors(playerName);
+    this.byId = new Map();
+    if (roster) this.syncRoster(roster, youId);
+    else this.createActors(playerName, humans);
     this.siteEntries = {};
   }
 
+  // ---------- events ----------
+  // Runs an event locally and queues it for LAN clients when hosting.
+  fire(ev) {
+    handleEvent(this, ev);
+    if (this.net) this.net.events.push(ev);
+  }
+
+  // src: actor (sound follows them; silent position for "me"), {x,y,z} or null.
+  // opts.owner: only that actor's player hears it; opts.pred: their client already played it.
+  sound(name, src, vol = 1, opts = {}) {
+    const ev = { e: 'snd', n: name, v: vol };
+    if (src && src.id !== undefined) ev.a = src.id;
+    else if (src) ev.p = [src.x, src.y, src.z];
+    if (opts.owner) ev.o = src.id;
+    if (opts.pred) ev.pr = 1;
+    this.fire(ev);
+  }
+
+  // Message for everyone, a team ({team}) or one actor ({to}).
+  msg(key, dur, cls, opts = {}) {
+    const ev = { e: 'msg', k: key, d: dur, c: cls };
+    if (opts.to) ev.o = opts.to.id;
+    if (opts.team !== undefined) ev.tm = opts.team;
+    if (opts.args) ev.x = opts.args;
+    this.fire(ev);
+  }
+
   // ---------- setup ----------
-  createActors(playerName) {
+  createActors(playerName, humans) {
     const s = this.setup;
-    let team = s.team === 't' ? TEAM.T : s.team === 'ct' ? TEAM.CT : (this.rng() < 0.5 ? TEAM.T : TEAM.CT);
-    this.player = new Actor(playerName || t('you'), team, false);
+    const people = [{ name: playerName || t('you'), team: s.team, local: true }, ...humans];
+    const count = [0, 0];
+    const teamOf = (pref) => (pref === 't' ? TEAM.T : pref === 'ct' ? TEAM.CT : -1);
+    for (const h of people) { h.tm = this.ffa ? -1 : teamOf(h.team); if (h.tm >= 0) count[h.tm]++; }
+    for (const h of people) {
+      if (h.tm >= 0) continue;
+      h.tm = count[0] === count[1] ? (this.rng() < 0.5 ? TEAM.T : TEAM.CT) : count[0] < count[1] ? TEAM.T : TEAM.CT;
+      count[h.tm]++;
+    }
+    for (const h of people) {
+      const a = new Actor(h.name, h.tm, false);
+      if (h.local) {
+        this.player = a;
+        if (this.autopilot) a.brain = new BotBrain(a, this, s.diff);
+      } else { a.remote = true; a.netId = h.netId; }
+      this.actors.push(a);
+    }
     this.listenerActor = this.player;
     this.viewActor = this.player;
-    if (this.autopilot) this.player.brain = new BotBrain(this.player, this, s.diff);
-    this.actors.push(this.player);
     const names = BOT_NAMES.slice().sort(() => this.rng() - 0.5);
     let ni = 0;
     const per = Math.max(1, Math.min(6, s.bots | 0));
     for (const tm of [TEAM.T, TEAM.CT]) {
-      const n = tm === team ? per - 1 : per;
-      for (let i = 0; i < n; i++) {
+      for (let i = count[tm]; i < per; i++) {
         const b = new Actor(names[ni++ % names.length], tm, true);
         b.brain = new BotBrain(b, this, s.diff);
         this.actors.push(b);
@@ -68,10 +114,50 @@ export class Game {
     }
     for (const a of this.actors) {
       a.money = RULES.startMoney;
-      a.model = buildCharacter(a.team);
-      a.model.visible = false;
-      this.scene.add(a.model);
+      this.addModel(a);
     }
+  }
+
+  addModel(a) {
+    a.model = buildCharacter(a.team);
+    a.model.visible = false;
+    a.modelTeam = a.team;
+    this.scene.add(a.model);
+    this.byId.set(a.id, a);
+  }
+
+  // Roster entries: [id, name, team, isBot, isHuman]. Used by clients and after joins.
+  rosterList() { return this.actors.map((a) => [a.id, a.name, a.team, a.isBot ? 1 : 0, a.isBot ? 0 : 1]); }
+
+  syncRoster(list, youId) {
+    const keep = new Set(list.map((r) => r[0]));
+    for (const a of this.actors.slice()) {
+      if (keep.has(a.id)) continue;
+      if (a.model) this.scene.remove(a.model);
+      this.actors.splice(this.actors.indexOf(a), 1);
+      this.byId.delete(a.id);
+    }
+    for (const [id, name, team, isBot] of list) {
+      let a = this.byId.get(id);
+      if (!a) {
+        a = new Actor(name, team, !!isBot);
+        a.id = id;
+        a.alive = false;
+        a.deathT = 99;
+        this.actors.push(a);
+        this.addModel(a);
+      }
+      a.name = name;
+      a.isBot = !!isBot;
+      if (a.team !== team || a.modelTeam !== team) {
+        a.team = team;
+        this.scene.remove(a.model);
+        this.addModel(a);
+      }
+    }
+    if (youId !== undefined && youId !== null) this.player = this.byId.get(youId);
+    if (!this.listenerActor || !keep.has(this.listenerActor.id)) this.listenerActor = this.player;
+    if (!this.viewActor || !keep.has(this.viewActor.id)) this.viewActor = this.player;
   }
 
   isEnemy(a, b) {
@@ -143,7 +229,7 @@ export class Game {
 
   buy(a, key, silent = false) {
     const err = this.buyError(a, key);
-    if (err) { if (!silent && a === this.player) { this.ui.message(t(err), 1.5, 'warn'); audio.play('deny'); } return false; }
+    if (err) { if (!silent && !a.isBot) { this.msg(err, 1.5, 'warn', { to: a }); this.sound('deny', a, 1, { owner: true }); } return false; }
     const w = WEAPONS[key];
     let cost = this.mode === 'dm' ? 0 : (w || GEAR[key]).price;
     if (key === 'vesthelm' && a.armor >= 100 && !a.helmet && this.mode !== 'dm') cost = 350;
@@ -160,27 +246,23 @@ export class Game {
       a.slots[w.slot] = makeWeapon(key);
       if (a.brain && WEAPONS[key].silencer && this.rng() < 0.5) a.slots[w.slot].silenced = true;
       if (a.slot === w.slot) a.switchT = 0.6; else a.select(w.slot);
-      if (this.mode === 'dm' && w.slot === 0 && a === this.player) this.dmChoice = key;
+      if (this.mode === 'dm' && w.slot === 0) a.dmChoice = key;
     }
-    if (a === this.player) { audio.play('buy'); this.lastBuys = this.lastBuys || []; if (!this.buyingRebuy) this.recordBuy(key); }
+    if (!a.isBot) {
+      this.sound('buy', a, 1, { owner: true });
+      if (!a.buyingRebuy) { a.roundBuys = a.roundBuys || []; a.roundBuys.push(key); a.lastBuys = a.roundBuys.slice(); }
+    }
     return true;
   }
 
-  recordBuy(key) {
-    if (!this.roundBuys) this.roundBuys = [];
-    this.roundBuys.push(key);
-    this.lastBuys = this.roundBuys.slice();
+  rebuy(a = this.player) {
+    if (!a.lastBuys) return;
+    a.buyingRebuy = true;
+    for (const k of a.lastBuys) this.buy(a, k, true);
+    a.buyingRebuy = false;
   }
 
-  rebuy() {
-    if (!this.lastBuys) return;
-    this.buyingRebuy = true;
-    for (const k of this.lastBuys) this.buy(this.player, k, true);
-    this.buyingRebuy = false;
-  }
-
-  autobuy() {
-    const a = this.player;
+  autobuy(a = this.player) {
     const rifle = a.team === TEAM.T ? 'ak47' : 'm4a1';
     const order = [rifle, 'vesthelm', a.team === TEAM.CT ? 'kit' : null, 'he', 'flash', 'smoke'];
     if (!a.slots[0] && a.money < WEAPONS[rifle].price) order.unshift(a.team === TEAM.T ? 'galil' : 'famas', 'mp5');
@@ -199,8 +281,8 @@ export class Game {
       this.phaseT = this.mode === 'dm' ? RULES.dmTime : Infinity;
       this.liveStart = this.time;
       for (const a of this.actors) this.respawn(a);
-      audio.say(t('go'));
-      this.ui.message(t(this.mode === 'dm' ? 'mode_dm' : 'mode_gg'), 2.5, 'big');
+      this.fire({ e: 'say', k: 'go' });
+      this.msg(this.mode === 'dm' ? 'mode_dm' : 'mode_gg', 2.5, 'big');
     }
   }
 
@@ -208,7 +290,7 @@ export class Game {
 
   startRound() {
     this.round++;
-    this.roundBuys = [];
+    for (const a of this.actors) a.roundBuys = [];
     this.phase = 'freeze';
     this.phaseT = RULES.freezeTime;
     this.roundStart = this.time;
@@ -248,18 +330,17 @@ export class Game {
       a.pitch = 0;
       a.slot = a.bestSlot(); a.lastSlot = 2;
       a.roundKills = 0;
+      a.tp = (a.tp || 0) + 1;
       if (a.brain) a.brain.reset();
     }
     const ts = this.actors.filter((a) => a.team === TEAM.T);
     if (ts.length && this.mode === 'bomb') {
       const carrier = ts[(this.rng() * ts.length) | 0];
       carrier.hasBomb = true;
-      if (carrier === this.player && !this.autopilot) this.ui.message(t('have_bomb'), 4, 'info');
+      if (!carrier.isBot && !(carrier === this.player && this.autopilot)) this.msg('have_bomb', 4, 'info', { to: carrier });
     }
-    for (const a of this.actors) if (a.brain && a !== this.player) a.brain.buy();
-    if (this.autopilot) this.player.brain.buy();
-    this.ui.roundStart(this.round);
-    audio.play('roundStart');
+    for (const a of this.actors) if (a.brain) a.brain.buy();
+    this.fire({ e: 'rstart', r: this.round });
   }
 
   endRound(winner, reason) {
@@ -273,16 +354,14 @@ export class Game {
     const winMoney = reason === 'bomb' || reason === 'defuse' ? RULES.winBomb : reason === 'time' ? RULES.winTime : RULES.winElim;
     const lossMoney = lossBonus(this.lossStreak[loser]);
     for (const a of this.actors) this.addMoney(a, a.team === winner ? winMoney : lossMoney);
-    const p = this.player;
-    if (p.team === winner) this.stat('wins', 1); else this.stat('losses', 1);
     // Round MVP: most kills on the winning team.
     const mvp = this.actors.filter((a) => a.team === winner).sort((a, b) => b.roundKills - a.roundKills)[0];
     if (mvp && mvp.roundKills > 0) mvp.mvps++;
     const key = winner === TEAM.T ? 't_win' : 'ct_win';
     this.lastWinner = winner;
-    this.ui.roundEnd(winner, reason, mvp && mvp.roundKills > 0 ? mvp : null);
-    audio.play(p.team === winner ? 'win' : 'lose');
-    audio.say(t(winner === TEAM.T ? 'r_twin' : 'r_ctwin'));
+    const ev = { e: 'rend', w: winner, r: reason };
+    if (mvp && mvp.roundKills > 0) ev.mvp = mvp.id;
+    this.fire(ev);
     const target = this.setup.rounds;
     if (this.score[winner] >= target || this.round >= target * 2 - 1) this.pendingEnd = true;
     return key;
@@ -292,18 +371,15 @@ export class Game {
     if (this.over) return;
     this.over = true;
     this.phase = 'over';
-    const p = this.player;
-    const won = this.ffa ? winnerActor === p : winnerTeam === p.team;
-    this.stat('matches', 1);
-    const sorted = this.actors.slice().sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
-    if (sorted[0] === p) this.stat('mvp', 1);
-    this.ui.matchEnd({ won, winnerTeam, winnerActor, score: this.score.slice(), actors: sorted, mvp: sorted[0] });
-    audio.play(won ? 'win' : 'lose');
+    const ev = { e: 'mend', wt: winnerTeam };
+    if (winnerActor) ev.wa = winnerActor.id;
+    this.fire(ev);
   }
 
   addMoney(a, n) {
+    const before = a.money;
     a.money = Math.max(0, Math.min(RULES.maxMoney, a.money + n));
-    if (a === this.player && n) this.ui.money(n);
+    if (!a.isBot && a.money !== before) this.fire({ e: 'money', o: a.id, n: a.money - before });
   }
 
   // ---------- spawns for DM / GG ----------
@@ -326,12 +402,13 @@ export class Game {
     else {
       a.slots[1] = makeWeapon('deagle');
       a.armor = 100; a.helmet = true;
-      const k = a === this.player && this.dmChoice ? this.dmChoice : (a.brain ? (a.dmPick || (a.dmPick = DM_WEAPONS[(this.rng() * DM_WEAPONS.length) | 0])) : 'ak47');
+      const k = a.dmChoice ? a.dmChoice : (a.brain ? (a.dmPick || (a.dmPick = DM_WEAPONS[(this.rng() * DM_WEAPONS.length) | 0])) : 'ak47');
       if (WEAPONS[k].slot === 0) a.slots[0] = makeWeapon(k);
       a.nades.he = 1;
       a.slot = a.bestSlot();
     }
     a.switchT = 0.4;
+    a.tp = (a.tp || 0) + 1;
     if (a.brain) a.brain.reset();
   }
 
@@ -356,14 +433,19 @@ export class Game {
   callout(team, x, z) { this.calls[team] = { x, z, t: this.time }; }
 
   radio(a, key) {
-    if (!a || a.team !== this.player.team || this.ffa) return;
+    if (!a || this.ffa) return;
     const last = this.radioT.get(a.id) || -10;
     if (this.time - last < 6) return;
     this.radioT.set(a.id, this.time);
-    this.ui.chat(a, t(key));
+    this.fire({ e: 'chat', a: a.id, k: key });
   }
 
-  stat(key, n) { if (!this.autopilot) this.ui.stat(key, n); }
+  stat(key, n, a = this.player, pred = false) {
+    if (a.isBot) return;
+    const ev = { e: 'stat', o: a.id, k: key, n };
+    if (pred) { ev.pr = 1; ev.a = a.id; }
+    this.fire(ev);
+  }
 
   muzzleOf(a) {
     const cp = Math.cos(a.pitch);
@@ -381,32 +463,13 @@ export class Game {
     const own = a === this.viewActor;
     const x = a.x + rx * (own ? 0.18 : 0.15) + fx * (own ? 0.35 : 0.5), y = a.y + a.eyeHeight() - (own ? 0.12 : 0.25), z = a.z + rz * (own ? 0.18 : 0.15) + fz * (own ? 0.35 : 0.5);
     this.fx.norm.emit(x, y, z, rx * 2.2 + (this.rng() - 0.5), 1.8 + this.rng(), rz * 2.2 + (this.rng() - 0.5), 0.6, 0.035, 0.85, 0.62, 0.22, 1, 9);
-    if (own && this.rng() < 0.4) setTimeout(() => audio.play('brass', null, 0.5), 450);
-  }
-
-  onShot(a, muzzle, silenced) {
-    if (silenced) { this.ui.shot(a, true); return; }
-    if (a.model && a.model.visible) { a.model.userData.flash.visible = true; a.flashOff = this.time + 0.05; a.model.userData.flash.material.rotation = this.rng() * 6; }
-    if (a !== this.player || this.autopilot) this.fx.flashLight(muzzle.x, muzzle.y, muzzle.z, 2.5, 0xffc070, 0.05);
-    this.ui.shot(a);
+    if (own && Math.random() < 0.4) setTimeout(() => audio.play('brass', null, 0.5), 450);
   }
 
   onDamage(victim, attacker, hp, zone, dir, helmetDink) {
-    if (attacker === this.player) {
-      this.ui.hitmarker(zone === 'head', victim.hp <= 0);
-      this.stat('hits', 1);
-    }
-    if (victim === this.player) {
-      if (attacker && attacker !== victim) {
-        const ang = Math.atan2(attacker.x - victim.x, attacker.z - victim.z);
-        this.ui.damageDir(ang, hp);
-      }
-      this.ui.hurt(hp);
-      audio.play('hurt', null, 0.5);
-    }
-    const pos = { x: victim.x, y: victim.y + 1.3, z: victim.z };
-    if (zone === 'head') audio.play('headshot', victim === this.player ? null : pos, helmetDink ? 0.7 : 1);
-    else if (zone !== 'blast') audio.play(victim.armor > 0 && zone !== 'legs' ? 'kevlar' : 'hit', victim === this.player ? null : pos, 0.8);
+    const ev = { e: 'dmg', v: victim.id, hp, z: zone, hd: helmetDink ? 1 : 0, k: victim.armor > 0 && zone !== 'legs' ? 1 : 0, kl: victim.hp <= 0 ? 1 : 0 };
+    if (attacker) { ev.a = attacker.id; ev.ax = Math.round(attacker.x * 100) / 100; ev.az = Math.round(attacker.z * 100) / 100; }
+    this.fire(ev);
     if (victim.brain && attacker) { victim.brain.heard = { x: attacker.x, y: attacker.y, z: attacker.z, t: this.time }; }
   }
 
@@ -428,13 +491,13 @@ export class Game {
         attacker.roundKills++;
         if (hs) attacker.hsKills++;
         if (this.mode === 'bomb') this.addMoney(attacker, (WEAPONS[weaponKey] && WEAPONS[weaponKey].kill) || RULES.killReward);
-        if (attacker === this.player) { this.stat('kills', 1); if (hs) this.stat('hs', 1); }
       }
     } else if (!attacker || attacker === victim) {
       victim.kills = Math.max(0, victim.kills - (this.mode === 'bomb' ? 0 : 1));
     }
-    if (victim === this.player) { this.stat('deaths', 1); this.ui.died(attacker, weaponKey); }
-    this.ui.killfeed(attacker, victim, weaponKey, hs, wallbang);
+    const kev = { e: 'kill', v: victim.id, w: weaponKey, hs: hs ? 1 : 0, wb: wallbang ? 1 : 0, tk: teamKill ? 1 : 0 };
+    if (attacker) kev.a = attacker.id;
+    this.fire(kev);
     // Drop the best gun and the bomb.
     if (this.mode === 'bomb') {
       const s = victim.slots[0] ? 0 : victim.slots[1] ? 1 : -1;
@@ -454,7 +517,7 @@ export class Game {
     if (weaponKey === 'knife' && victim.ggLevel > 0 && a.ggLevel !== GUNGAME.length - 1) victim.ggLevel--;
     if (a.ggLevel >= GUNGAME.length - 1) { this.endMatch(a.team, a); return; }
     a.ggLevel++;
-    if (a === this.player) audio.play('levelUp');
+    this.sound('levelUp', a, 1, { owner: true });
     if (a.alive) this.giveGG(a);
   }
 
@@ -465,7 +528,7 @@ export class Game {
     this.scene.add(model);
     const f = { x: -Math.sin(a.yaw), z: -Math.cos(a.yaw) };
     const d = {
-      key, w, model, x: a.x + f.x * 0.3, y: a.y + 1.1, z: a.z + f.z * 0.3,
+      id: this.nextObjId++, key, w, model, x: a.x + f.x * 0.3, y: a.y + 1.1, z: a.z + f.z * 0.3,
       vx: f.x * 3 + a.vx * 0.4, vy: 1.5, vz: f.z * 3 + a.vz * 0.4, rest: false, by: a, t: this.time,
     };
     this.drops.push(d);
@@ -491,7 +554,7 @@ export class Game {
     this.bomb.dropped = true;
     this.bomb.dropRef = d;
     this.bomb.x = d.x; this.bomb.z = d.z; this.bomb.y = d.y;
-    if (this.player.team === TEAM.T) this.ui.message(t('bomb_dropped'), 2, 'warn');
+    this.msg('bomb_dropped', 2, 'warn', { team: TEAM.T });
   }
 
   clearDrops() {
@@ -529,7 +592,7 @@ export class Game {
       a.hasBomb = true;
       this.bomb.dropped = false;
       this.bomb.dropRef = null;
-      if (a === this.player) { this.ui.message(t('bomb_picked'), 2, 'info'); audio.play('pickup'); }
+      if (!a.isBot) { this.msg('bomb_picked', 2, 'info', { to: a }); this.sound('pickup', a, 1, { owner: true }); }
       return true;
     }
     const def = WEAPONS[d.key];
@@ -537,7 +600,7 @@ export class Game {
       if (a.nades[def.nade] >= (def.max || 1)) return false;
       a.nades[def.nade]++;
       if (!a.nadeKey) a.nadeKey = def.nade;
-      if (a === this.player) audio.play('pickup');
+      this.sound('pickup', a, 1, { owner: true });
       return true;
     }
     if (this.mode === 'gg') return false;
@@ -547,7 +610,7 @@ export class Game {
       this.dropWeapon(a, s, true);
     }
     a.slots[s] = d.w || makeWeapon(d.key);
-    if (a === this.player) audio.play('pickup');
+    this.sound('pickup', a, 1, { owner: true });
     if (a.slot === s || swap || (s === 0 && a.slot !== 3 && a.slot !== 4)) { a.slot = -1; a.select(s); }
     return true;
   }
@@ -567,40 +630,52 @@ export class Game {
     a.hasBomb = false;
     a.plantT = 0;
     a.select(a.bestSlot());
+    this.bomb = { planted: true, dropped: false, x: a.x, y: this.grid.topAt(a.x, a.z) + 0.07, z: a.z, site, timer: RULES.bombTime, defuser: null, beepT: 0, planter: a };
+    this.makeBombModel(a.yaw);
+    for (const x of this.actors) if (x.team === TEAM.T) this.addMoney(x, RULES.plantReward);
+    this.stat('plants', 1, a);
+    a.score += 2;
+    this.sound('planted', { x: a.x, y: a.y, z: a.z }, 1);
+    this.fire({ e: 'say', k: 'r_planted' });
+    this.msg('bomb_planted', 3, 'big');
+    this.noise(a.x, a.y, a.z, 100, a);
+  }
+
+  makeBombModel(yaw = 0) {
+    const B = this.bomb;
     const model = buildGun('bomb');
     model.scale.setScalar(1.7);
-    model.position.set(a.x, this.grid.topAt(a.x, a.z) + 0.07, a.z);
-    model.rotation.y = a.yaw;
+    model.position.set(B.x, B.y, B.z);
+    model.rotation.y = yaw;
     const led = new THREE.Sprite(new THREE.SpriteMaterial({ map: softSprite('spark'), color: 0xff2020, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
     led.scale.set(0.35, 0.35, 1);
     led.position.set(0, 0.08, 0);
     model.add(led);
     this.scene.add(model);
-    this.bomb = { planted: true, dropped: false, x: a.x, y: model.position.y, z: a.z, site, timer: RULES.bombTime, defuser: null, model, led, beepT: 0, planter: a };
-    for (const x of this.actors) if (x.team === TEAM.T) this.addMoney(x, RULES.plantReward);
-    if (a === this.player) this.stat('plants', 1);
-    a.score += 2;
-    audio.play('planted', { x: a.x, y: a.y, z: a.z }, 1);
-    audio.say(t('r_planted'));
-    this.ui.message(t('bomb_planted'), 3, 'big');
-    this.noise(a.x, a.y, a.z, 100, a);
-    this.ui.bombPlanted(site);
+    B.model = model;
+    B.led = led;
+  }
+
+  // Beeps and LED blink; runs on host and clients alike.
+  bombBeep(dt) {
+    const B = this.bomb;
+    if (!B.planted || !B.led) return;
+    const frac = Math.max(0, B.timer / RULES.bombTime);
+    B.beepT = (B.beepT || 0) - dt;
+    if (B.beepT <= 0) {
+      B.beepT = 0.12 + frac * 0.95;
+      audio.play('beep', { x: B.x, y: B.y + 0.2, z: B.z }, 1.2);
+      B.led.visible = true;
+      B.ledOff = this.time + 0.08;
+    }
+    if (B.ledOff && this.time > B.ledOff) B.led.visible = false;
   }
 
   updateBomb(dt) {
     const B = this.bomb;
     if (!B.planted || this.phase !== 'live') return;
     B.timer -= dt;
-    const frac = Math.max(0, B.timer / RULES.bombTime);
-    const interval = 0.12 + frac * 0.95;
-    B.beepT -= dt;
-    if (B.beepT <= 0) {
-      B.beepT = interval;
-      audio.play('beep', { x: B.x, y: B.y + 0.2, z: B.z }, 1.2);
-      B.led.visible = true;
-      B.ledOff = this.time + 0.08;
-    }
-    if (B.ledOff && this.time > B.ledOff) B.led.visible = false;
+    this.bombBeep(dt);
     if (B.defuser) {
       const d = B.defuser;
       if (!d.alive) { B.defuser = null; d.defuseT = 0; }
@@ -613,9 +688,8 @@ export class Game {
     B.planted = false;
     B.exploded = true;
     this.scene.remove(B.model);
-    audio.play('bombExplode', { x: B.x, y: B.y + 1, z: B.z }, 2);
-    this.fx.explosion(B.x, B.y, B.z, true);
-    this.shake(B.x, B.z, 60, 1.6);
+    this.sound('bombExplode', { x: B.x, y: B.y + 1, z: B.z }, 2);
+    this.fire({ e: 'expl', p: [B.x, B.y, B.z], big: 1 });
     for (const a of this.actors) {
       if (!a.alive) continue;
       const d = Math.hypot(a.x - B.x, a.z - B.z, (a.y - B.y) * 0.5);
@@ -623,7 +697,7 @@ export class Game {
       const dmg = RULES.bombDamage * Math.pow(1 - d / RULES.bombRadius, 2);
       if (dmg >= 1) damage(this, a, null, dmg, 'blast', 0.75, 'bomb');
     }
-    this.ui.message(t('bomb_exploded'), 3, 'big');
+    this.msg('bomb_exploded', 3, 'big');
     this.endRound(TEAM.T, 'bomb');
   }
 
@@ -633,11 +707,11 @@ export class Game {
     B.defused = true;
     a.defuseT = 0;
     B.led.visible = false;
-    if (a === this.player) this.stat('defuses', 1);
+    this.stat('defuses', 1, a);
     a.score += 2;
-    audio.play('defused', { x: B.x, y: B.y, z: B.z }, 1);
-    audio.say(t('r_defused'));
-    this.ui.message(t('bomb_defused'), 3, 'big');
+    this.sound('defused', { x: B.x, y: B.y, z: B.z }, 1);
+    this.fire({ e: 'say', k: 'r_defused' });
+    this.msg('bomb_defused', 3, 'big');
     this.endRound(TEAM.CT, 'defuse');
   }
 
@@ -646,8 +720,6 @@ export class Game {
     const d = Math.hypot(p.x - x, p.z - z);
     if (d < radius) this.shakeAmt = Math.max(this.shakeAmt, amount * (1 - d / radius));
   }
-
-  onFlashed(dur) { this.ui.flash(dur); audio.play('ring', null, Math.min(1, dur / 4)); }
 
   makeNadeModel(key) {
     const m = buildGun(key);
@@ -688,7 +760,7 @@ export class Game {
       if (cmd.jump && a.alive && this.phase !== 'freeze' && a.plantT <= 0 && a.defuseT <= 0) {
         a.vy = PHYS.jumpSpeed * (a.crouch > 0.5 ? 0.9 : 1);
         a.onGround = false;
-        if (a === this.listenerActor) audio.play('jump', null, 0.5);
+        this.sound('jump', a, 0.5, { owner: true, pred: true });
       }
     } else if (wishLen > 0) {
       const dirx = wx / (wl || 1), dirz = wz / (wl || 1);
@@ -700,21 +772,92 @@ export class Game {
     const landed = this.grid.move(a, dt);
     if (landed) {
       a.stamina = Math.min(a.stamina, 0.72);
-      if (a.fallSpeed > 11) damage(this, a, null, (a.fallSpeed - 11) * 10, 'legs', 1, 'fall');
+      if (a.fallSpeed > 11) { if (this.role === 'client') a.pendingFall = a.fallSpeed; else damage(this, a, null, (a.fallSpeed - 11) * 10, 'legs', 1, 'fall'); }
       if (a.fallSpeed > 4) {
-        audio.play('land', a === this.listenerActor ? null : { x: a.x, y: a.y, z: a.z }, 0.7);
+        this.sound('land', a, 0.7, { pred: true });
         this.noise(a.x, a.y, a.z, 14, a);
       }
     }
     a.speed2d = Math.hypot(a.vx, a.vz);
-    // Footsteps are audible when running.
-    if (a.onGround && a.speed2d > 3.3 && !cmd.walk && a.crouch < 0.5) {
+    this.footsteps(a, dt, cmd.walk);
+  }
+
+  // Footsteps are audible when running.
+  footsteps(a, dt, walk) {
+    if (a.onGround && a.speed2d > 3.3 && !walk && a.crouch < 0.5) {
       a.stepAcc += a.speed2d * dt;
       if (a.stepAcc > 2.3) {
         a.stepAcc = 0;
-        audio.play('step', a === this.listenerActor ? null : { x: a.x, y: a.y, z: a.z }, a === this.listenerActor ? 0.25 : 0.9);
+        this.sound('step', a, a === this.listenerActor ? 0.25 : 0.9, { pred: true });
         this.noise(a.x, a.y, a.z, 20, a);
       }
+    }
+  }
+
+  // ---------- LAN: remote players on the host ----------
+  // Merges a command from a client into its actor's pending input.
+  remoteInput(a, c) {
+    const n = a.net || (a.net = { atk: [], slotSeq: -1, rl: 0, ss: -1 });
+    if (Array.isArray(c.p) && c.p.length === 3 && c.p.every(Number.isFinite)) { n.pos = c.p; n.vel = Array.isArray(c.v) ? c.v : [0, 0, 0]; n.og = !!c.g; }
+    if (Number.isFinite(c.y)) a.yaw = c.y;
+    if (Number.isFinite(c.pt)) a.pitch = Math.max(-1.5, Math.min(1.5, c.pt));
+    n.cr = Number.isFinite(c.c) ? Math.max(0, Math.min(1, c.c)) : 0;
+    n.walk = !!c.w;
+    n.use = !!c.u;
+    if (c.up) n.usePressed = true;
+    if (c.dr) n.drop = true;
+    if (c.ss !== undefined && c.ss !== n.ss) { n.ss = c.ss; n.slot = c.s; n.nk = c.nk; }
+    if (c.rl !== undefined && c.rl !== n.rl) { n.rl = c.rl; n.reload = true; }
+    n.sil = c.sl; n.scope = c.sc;
+    if (Array.isArray(c.at)) n.atk.push(...c.at.slice(0, 20));
+    if (Number.isFinite(c.fall)) n.fall = Math.max(n.fall || 0, c.fall);
+  }
+
+  remoteStep(a, dt) {
+    const n = a.net;
+    if (!n) return;
+    if (n.pos) {
+      const [x, y, z] = n.pos;
+      const since = Math.max(0.05, this.time - (n.applied ?? this.time - 0.1));
+      const frozen = this.phase === 'freeze' || a.plantT > 0 || a.defuseT > 0;
+      const lim = frozen ? 0.35 : (a.maxSpeed() * 1.6 + 2) * since + 0.8;
+      const ok = Math.hypot(x - a.x, z - a.z) <= lim && !this.grid.blockedAt(x, z, PHYS.radius * 0.8, y, y + 1) && y >= this.grid.groundUnder(x, z, PHYS.radius * 0.5) - 0.6;
+      if (ok) { a.x = x; a.y = y; a.z = z; a.vx = n.vel[0] || 0; a.vy = n.vel[1] || 0; a.vz = n.vel[2] || 0; a.onGround = n.og; }
+      else { a.tp = (a.tp || 0) + 1; a.vx = a.vz = 0; }
+      n.pos = null;
+      n.applied = this.time;
+    }
+    a.crouch = n.cr;
+    a.speed2d = Math.hypot(a.vx, a.vz);
+    this.footsteps(a, dt, n.walk);
+    if (n.fall > 11) damage(this, a, null, (n.fall - 11) * 10, 'legs', 1, 'fall');
+    n.fall = 0;
+    if (!a.alive) return;
+    if (n.slot !== undefined && n.slot !== null) {
+      if (n.slot === 3 && n.nk && a.nades[n.nk] > 0) a.nadeKey = n.nk;
+      if (a.slot !== n.slot) a.select(n.slot);
+      n.slot = null;
+    }
+    const w = a.w;
+    if (w.def.silencer && n.sil !== undefined) w.silenced = !!n.sil;
+    if (w.def.kind === 'sniper') a.scope = n.scope | 0;
+    const cmd = { fire: false, alt: false, reload: !!n.reload, use: n.use, usePressed: !!n.usePressed, drop: !!n.drop };
+    this.objectives(a, cmd, dt);
+    if (a.plantT <= 0 && a.defuseT <= 0) updateWeapon(this, a, cmd, dt);
+    for (const at of n.atk) remoteAttack(this, a, at);
+    n.atk.length = 0;
+    this.useAndDrop(a, cmd);
+    n.reload = false; n.usePressed = false; n.drop = false;
+  }
+
+  useAndDrop(a, cmd) {
+    if (cmd.usePressed && a.plantT <= 0 && a.defuseT <= 0) {
+      const d = this.nearestDrop(a);
+      if (d && this.tryPickup(a, d, true)) { this.drops.splice(this.drops.indexOf(d), 1); this.scene.remove(d.model); }
+    }
+    if (cmd.drop) {
+      if (a.slot === 4 && a.hasBomb) this.dropBomb(a);
+      else if (a.slot <= 1) this.dropWeapon(a, a.slot, false);
     }
   }
 
@@ -746,18 +889,18 @@ export class Game {
       const site = this.siteAt(a.x, a.z);
       if (want && site && a.onGround) {
         if (a.slot !== 4) { a.select(4); a.switchT = 0; }
-        if (a.plantT === 0) audio.play('plant', a === this.listenerActor ? null : { x: a.x, y: a.y + 1, z: a.z }, 0.8);
+        if (a.plantT === 0) this.sound('plant', a, 0.8);
         a.plantT += dt;
         if (a.plantT >= RULES.plantTime) this.plant(a, site);
       } else {
-        if (want && !site && a === this.player && this.time - (this.siteHintT || -9) > 2) { this.siteHintT = this.time; this.ui.message(t('must_site'), 1.5, 'warn'); }
+        if (want && !site && !a.isBot && this.time - (a.siteHintT || -9) > 2) { a.siteHintT = this.time; this.msg('must_site', 1.5, 'warn', { to: a }); }
         a.plantT = 0;
       }
     }
     if (B.planted && a.team === TEAM.CT) {
       const near = Math.hypot(a.x - B.x, a.z - B.z) < 1.6 && Math.abs(a.y - B.y) < 1.4;
       if (cmd.use && near && (!B.defuser || B.defuser === a)) {
-        if (!B.defuser) audio.play('defuse', { x: B.x, y: B.y, z: B.z }, 0.8);
+        if (!B.defuser) this.sound('defuse', { x: B.x, y: B.y, z: B.z }, 0.8);
         B.defuser = a;
         a.defuseT += dt;
         if (a.defuseT >= (a.kit ? RULES.defuseKitTime : RULES.defuseTime)) this.defuse(a);
@@ -775,6 +918,7 @@ export class Game {
   }
 
   update(dt, playerCmd) {
+    if (this.role === 'client') { if (this.client) this.client.step(dt, playerCmd); return; }
     if (this.over) { this.animate(dt); return; }
     this.time += dt;
     this.matchTime += dt;
@@ -784,8 +928,8 @@ export class Game {
       this.phaseT -= dt;
       if (this.phaseT <= 0) {
         this.phase = 'live'; this.phaseT = RULES.roundTime; this.liveStart = this.time;
-        audio.say(t('go'));
-        this.ui.message(t('go'), 1.5, 'big');
+        this.fire({ e: 'say', k: 'go' });
+        this.msg('go', 1.5, 'big');
       }
     } else if (this.phase === 'live') {
       if (!this.bomb.planted) this.phaseT -= dt;
@@ -816,21 +960,16 @@ export class Game {
       }
       if (a.protectT > 0) a.protectT -= dt;
       if (a.flashT > 0) a.flashT -= dt;
+      if (a.remote) { this.remoteStep(a, dt); continue; }
       let cmd;
       if (a.brain) cmd = a.brain.think(dt);
-      else cmd = playerCmd || { wx: 0, wz: 0 };
+      else if (a === this.player) cmd = playerCmd || { wx: 0, wz: 0 };
+      else cmd = { wx: 0, wz: 0 };
       if (cmd.slot !== null && cmd.slot !== undefined) a.select(cmd.slot);
       this.applyMove(a, cmd, dt);
       this.objectives(a, cmd, dt);
       if (a.plantT <= 0 && a.defuseT <= 0) updateWeapon(this, a, cmd, dt);
-      if (cmd.usePressed && a.plantT <= 0 && a.defuseT <= 0) {
-        const d = this.nearestDrop(a);
-        if (d && this.tryPickup(a, d, true)) { this.drops.splice(this.drops.indexOf(d), 1); this.scene.remove(d.model); }
-      }
-      if (cmd.drop) {
-        if (a.slot === 4 && a.hasBomb) this.dropBomb(a);
-        else if (a.slot <= 1) this.dropWeapon(a, a.slot, false);
-      }
+      this.useAndDrop(a, cmd);
     }
     this.separate();
     updateGrenades(this, dt);
@@ -844,6 +983,7 @@ export class Game {
   animate(dt) {
     for (const a of this.actors) {
       const m = a.model;
+      if (a.modelTeam !== a.team) { this.scene.remove(a.model); this.addModel(a); }
       const hideSelf = a === this.viewActor && !this.thirdPerson && a.alive;
       m.visible = !hideSelf && (a.alive || a.deathT < 12) && this.phase !== 'none';
       if (!m.visible) continue;

@@ -3,9 +3,9 @@
 import { WEAPONS, HIT } from './config.js';
 import { applyDamage, rangeFactor } from './rules.js';
 import { PENETRABLE } from './grid.js';
-import { audio } from './audio.js';
 
 const TMP = { x: 0, y: 0, z: 0 };
+const r4 = (v) => Math.round(v * 1e4) / 1e4;
 
 // Ray vs actor hitboxes. Returns {t, zone} or null.
 export function rayActor(a, ox, oy, oz, dx, dy, dz, maxT) {
@@ -89,12 +89,14 @@ function bullet(G, shooter, w, ox, oy, oz, dx, dy, dz, baseDmg) {
       const h = rayActor(a, sx, sy, sz, dx, dy, dz, wt);
       if (h && (!best || h.t < best.t)) best = { a, t: h.t, zone: h.zone };
     }
+    // Clients only predict where their tracer stops; the host decides hits.
+    if (best && G.role === 'client') return [sx + dx * best.t, sy + dy * best.t, sz + dz * best.t];
     if (best) {
       const dist = travelled + best.t;
       const mult = best.zone === 'arms' ? 1 : HIT[best.zone];
       const amount = dmg * mult * rangeFactor(def, dist);
       const hx = sx + dx * best.t, hy = sy + dy * best.t, hz = sz + dz * best.t;
-      G.fx.bloodHit(hx, hy, hz, dx, dy, dz, best.zone === 'head', G.grid);
+      G.fire({ e: 'blood', p: [r4(hx), r4(hy), r4(hz)], d: [r4(dx), r4(dy), r4(dz)], h: best.zone === 'head' ? 1 : 0 });
       damage(G, best.a, shooter, amount, best.zone, def.pen, w.key, { wallbang, dir: [dx, dz] });
       hitActors.add(best.a);
       if (def.kind === 'sniper' && pens > 0) { dmg *= 0.6; sx = hx + dx * 0.05; sy = hy + dy * 0.05; sz = hz + dz * 0.05; travelled = dist; continue; }
@@ -103,8 +105,8 @@ function bullet(G, shooter, w, ox, oy, oz, dx, dy, dz, baseDmg) {
     if (!wh) return [sx + dx * rem, sy + dy * rem, sz + dz * rem];
     const hx = sx + dx * wh.t, hy = sy + dy * wh.t, hz = sz + dz * wh.t;
     const surf = surfaceOf(G, wh.cx, wh.cz);
-    G.fx.impact(hx, hy, hz, wh.nx, wh.ny, wh.nz, surf);
-    if (G.rng() < 0.3) audio.play(G.rng() < 0.2 ? 'ricochet' : 'impact', { x: hx, y: hy, z: hz }, 0.6);
+    const snd = Math.random() < 0.3 ? (Math.random() < 0.2 ? 'ricochet' : 'impact') : 0;
+    G.fire({ e: 'imp', a: shooter.id, pr: 1, p: [r4(hx), r4(hy), r4(hz)], n: [wh.nx, wh.ny, wh.nz], s: surf, r: snd });
     G.noise(hx, hy, hz, 6, shooter);
     const ch = G.grid.charAt(wh.cx, wh.cz);
     const keep = PENETRABLE[ch];
@@ -116,7 +118,7 @@ function bullet(G, shooter, w, ox, oy, oz, dx, dy, dz, baseDmg) {
         wallbang = true;
         travelled += wh.t + thick + 0.02;
         sx = hx + dx * (thick + 0.02); sy = hy + dy * (thick + 0.02); sz = hz + dz * (thick + 0.02);
-        G.fx.impact(sx - dx * 0.03, sy - dy * 0.03, sz - dz * 0.03, dx, dy, dz, surf, false);
+        G.fire({ e: 'imp', a: shooter.id, pr: 1, p: [r4(sx - dx * 0.03), r4(sy - dy * 0.03), r4(sz - dz * 0.03)], n: [r4(dx), r4(dy), r4(dz)], s: surf, dc: 0 });
         continue;
       }
     }
@@ -126,7 +128,7 @@ function bullet(G, shooter, w, ox, oy, oz, dx, dy, dz, baseDmg) {
 }
 
 export function damage(G, victim, attacker, amount, zone, pen, weaponKey, opts = {}) {
-  if (!victim.alive || G.over) return;
+  if (G.role === 'client' || !victim.alive || G.over) return;
   if (victim.protectT > 0) return;
   if (attacker && attacker !== victim && !G.isEnemy(attacker, victim)) {
     if (!G.ff) return;
@@ -143,8 +145,11 @@ export function damage(G, victim, attacker, amount, zone, pen, weaponKey, opts =
   if (victim.hp <= 0) G.kill(victim, attacker, weaponKey, { hs: zone === 'head', wallbang: !!opts.wallbang });
 }
 
-function knifeAttack(G, a, heavy) {
+export function knifeAttack(G, a, heavy) {
   const def = WEAPONS.knife;
+  a.fireAnim = heavy ? 0.6 : 0.4;
+  G.sound('knife', a, 0.7, { pred: true });
+  if (G.role === 'client') { if (a === G.player) G.outAtk.push({ k: 'knife', h: heavy ? 1 : 0 }); return; }
   const f = a.forward(TMP);
   const ox = a.x, oy = a.y + a.eyeHeight(), oz = a.z;
   let best = null;
@@ -163,8 +168,6 @@ function knifeAttack(G, a, heavy) {
       if (dot > 0.8) { best = { v, t: d, zone: 'chest' }; break; }
     }
   }
-  audio.play('knife', a.isBot ? { x: a.x, y: a.y + 1.5, z: a.z } : null, 0.7);
-  a.fireAnim = heavy ? 0.6 : 0.4;
   if (best) {
     // Back stabs are lethal like the original.
     const fy = -Math.sin(best.v.yaw), fz = -Math.cos(best.v.yaw);
@@ -172,39 +175,46 @@ function knifeAttack(G, a, heavy) {
     let dmg = heavy ? def.dmg2 : def.dmg;
     if (back) dmg *= heavy ? 3 : 1.5;
     if (best.zone === 'head') dmg *= 1.2;
-    audio.play('knifeHit', { x: best.v.x, y: best.v.y + 1.3, z: best.v.z }, 0.9);
-    G.fx.bloodHit(best.v.x, best.v.y + 1.2, best.v.z, f.x, 0, f.z, false, G.grid);
+    G.sound('knifeHit', { x: best.v.x, y: best.v.y + 1.3, z: best.v.z }, 0.9);
+    G.fire({ e: 'blood', p: [r4(best.v.x), r4(best.v.y + 1.2), r4(best.v.z)], d: [r4(f.x), 0, r4(f.z)], h: 0 });
     damage(G, best.v, a, dmg, best.zone === 'head' ? 'head' : 'chest', 0.85, 'knife', { dir: [f.x, f.z] });
     return;
   }
   const wh = G.grid.raycast(ox, oy, oz, f.x, f.y, f.z, def.reach);
   if (wh) {
-    audio.play('knifeWall', { x: ox + f.x * wh.t, y: oy + f.y * wh.t, z: oz + f.z * wh.t }, 0.6);
-    G.fx.impact(ox + f.x * wh.t, oy + f.y * wh.t, oz + f.z * wh.t, wh.nx, wh.ny, wh.nz, 'stone');
+    G.sound('knifeWall', { x: ox + f.x * wh.t, y: oy + f.y * wh.t, z: oz + f.z * wh.t }, 0.6);
+    G.fire({ e: 'imp', a: a.id, p: [r4(ox + f.x * wh.t), r4(oy + f.y * wh.t), r4(oz + f.z * wh.t)], n: [wh.nx, wh.ny, wh.nz], s: 'stone' });
   }
 }
 
 function shoot(G, a, w) {
   const def = w.def;
   w.clip--;
-  a.shotsFired++;
-  a.fireAnim = 1;
-  a.lastShot = G.time;
-  const eyeY = a.y + a.eyeHeight();
   const spread = spreadOf(a, def) * (w.silenced ? 0.85 : 1);
   const yaw = a.yaw + a.punchY, pitch = a.pitch + a.punchP;
   const cp = Math.cos(pitch);
   const dx = -Math.sin(yaw) * cp, dy = Math.sin(pitch), dz = -Math.cos(yaw) * cp;
-  const pellets = def.pellets || 1;
+  const dirs = [];
+  for (let p = 0; p < (def.pellets || 1); p++) dirs.push(randomCone(dx, dy, dz, spread, G.rng).map(r4));
+  if (G.role === 'client' && a === G.player) G.outAtk.push({ k: 'shot', w: w.key, d: dirs });
+  fireShot(G, a, w, dirs);
+}
+
+// Fires the given bullet directions from the actor's eye: hits, effects, recoil.
+// Used for local shots and, on the host, for shots reported by LAN clients.
+export function fireShot(G, a, w, dirs) {
+  const def = w.def;
+  a.shotsFired++;
+  a.fireAnim = 1;
+  a.lastShot = G.time;
+  const eyeY = a.y + a.eyeHeight();
   const muzzle = G.muzzleOf(a);
-  for (let p = 0; p < pellets; p++) {
-    const [rx, ry, rz] = randomCone(dx, dy, dz, spread, G.rng);
+  const ends = [];
+  dirs.forEach(([rx, ry, rz], p) => {
     const end = bullet(G, a, w, a.x, eyeY, a.z, rx, ry, rz, def.dmg * (w.silenced ? 0.9 : 1));
-    if (p === 0 || p % 3 === 0) {
-      if (!a.isBot || G.rng() < 0.5) G.fx.tracer(muzzle.x, muzzle.y, muzzle.z, end[0], end[1], end[2]);
-    }
-  }
-  if (a === G.player) { G.stat('shots', 1); }
+    if ((p === 0 || p % 3 === 0) && (!a.isBot || Math.random() < 0.5)) ends.push(end.map(r4));
+  });
+  G.stat('shots', 1, a, true);
   // View kick: mostly vertical at first, then the spray sways sideways.
   const n = a.shotsFired;
   const kick = def.recoil * (n < 3 ? 0.9 : n < 10 ? 1.15 : 0.5) * (a.crouch > 0.6 ? 0.8 : 1);
@@ -213,18 +223,49 @@ function shoot(G, a, w) {
   const side = n < 4 ? 0 : Math.sin(n * 0.5 + a.sprayPhase) * def.recoilX * 2.2;
   a.punchY = Math.max(-0.13, Math.min(0.13, a.punchY + side + (G.rng() - 0.5) * def.recoilX));
   a.viewPunch = Math.min(1, a.viewPunch + kick * 8);
-  audio.shot(w.silenced ? 'silenced' : w.key, def.kind, a === G.listenerActor ? null : { x: a.x, y: eyeY, z: a.z });
+  G.fire({ e: 'shot', a: a.id, pr: 1, k: w.silenced ? 'silenced' : w.key, kind: def.kind, sil: w.silenced ? 1 : 0, m: [r4(muzzle.x), r4(muzzle.y), r4(muzzle.z)], ends, sh: def.kind !== 'shotgun' && def.kind !== 'sniper' ? 1 : 0 });
   G.noise(a.x, eyeY, a.z, w.silenced ? 14 : def.kind === 'pistol' ? 35 : 55, a);
-  G.onShot(a, muzzle, w.silenced);
-  if (def.kind !== 'shotgun' && def.kind !== 'sniper') G.ejectShell(a);
   if (a.protectT > 0) a.protectT = 0;
   if (def.kind === 'sniper') { a.scopeRestore = a.scope; a.scope = 0; }
+  if (def.kind === 'sniper' || w.key === 'm3') G.sound(def.kind === 'sniper' ? 'bolt' : 'shell', a, 0.5, { pred: true });
+}
+
+// Host side: an attack reported by a LAN client for its actor.
+export function remoteAttack(G, a, at) {
+  if (!a.alive || G.phase === 'freeze') return;
+  if (at.k === 'shot') {
+    const w = [a.slots[0], a.slots[1]].find((x) => x && x.key === at.w);
+    if (!w || w.clip <= 0 || !Array.isArray(at.d)) return;
+    if (G.time - (a.lastRemoteShot || -9) < w.def.rate * 0.55) return;
+    const dirs = at.d.slice(0, w.def.pellets || 1).filter((d) => Array.isArray(d) && d.length === 3 && d.every(Number.isFinite));
+    if (!dirs.length) return;
+    a.lastRemoteShot = G.time;
+    w.clip--;
+    fireShot(G, a, w, dirs);
+  } else if (at.k === 'knife') {
+    if (G.time - (a.lastRemoteKnife || -9) < 0.3) return;
+    a.lastRemoteKnife = G.time;
+    knifeAttack(G, a, !!at.h);
+  } else if (at.k === 'nade') {
+    if (!a.nades[at.n]) return;
+    a.nadeKey = at.n;
+    if (Number.isFinite(at.y)) a.yaw = at.y;
+    if (Number.isFinite(at.p)) a.pitch = at.p;
+    throwNade(G, a);
+  }
 }
 
 function throwNade(G, a) {
   const key = a.nadeKey;
   if (!key || a.nades[key] <= 0) return;
   a.nades[key]--;
+  a.fireAnim = 0.6;
+  G.sound('throw', a, 0.8, { pred: true });
+  if (G.role === 'client') {
+    if (a === G.player) G.outAtk.push({ k: 'nade', n: key, y: r4(a.yaw), p: r4(a.pitch) });
+    nextAfterThrow(a);
+    return;
+  }
   const f = a.forward(TMP);
   const pitch = Math.min(1.3, a.pitch + 0.12);
   const cp = Math.cos(pitch);
@@ -235,12 +276,14 @@ function throwNade(G, a) {
   G.grenades.push({
     type: key, owner: a, x: sx, y: oy, z: sz,
     vx: -Math.sin(a.yaw) * cp * speed + a.vx * 0.5, vy: Math.sin(pitch) * speed + 1.5, vz: -Math.cos(a.yaw) * cp * speed + a.vz * 0.5,
-    t: 0, fuse: key === 'smoke' ? 2.2 : 1.6, still: 0, model: G.makeNadeModel(key),
+    t: 0, fuse: key === 'smoke' ? 2.2 : 1.6, still: 0, model: G.makeNadeModel(key), id: G.nextObjId++,
   });
-  audio.play('throw', a.isBot ? { x: a.x, y: a.y + 1.5, z: a.z } : null, 0.8);
   if (a !== G.player || G.autopilot) G.radio(a, key === 'flash' ? 'r_flash' : key === 'smoke' ? 'r_smoke' : 'r_he');
-  a.fireAnim = 0.6;
-  // Switch to the next grenade or the best gun.
+  nextAfterThrow(a);
+}
+
+// Switch to the next grenade or the best gun.
+function nextAfterThrow(a) {
   const next = a.firstNade();
   if (next) { a.nadeKey = next; a.switchT = 0.5; }
   else { a.nadeKey = null; a.slot = a.lastSlot !== 3 && a.has(a.lastSlot) ? a.lastSlot : a.bestSlot(); a.switchT = 0.5; }
@@ -268,7 +311,7 @@ export function updateWeapon(G, a, cmd, dt) {
     a.reloadT -= dt;
     if (a.reloadT <= 0) {
       if (def.shellReload) {
-        if (w.reserve > 0 && w.clip < def.clip) { w.clip++; w.reserve--; audio.play('shell', a.isBot ? { x: a.x, y: a.y + 1.4, z: a.z } : null, 0.6); }
+        if (w.reserve > 0 && w.clip < def.clip) { w.clip++; w.reserve--; G.sound('shell', a, 0.6, { pred: true }); }
         if (w.reserve > 0 && w.clip < def.clip) a.reloadT = def.reload;
       } else {
         const need = def.clip - w.clip;
@@ -278,19 +321,20 @@ export function updateWeapon(G, a, cmd, dt) {
     }
   }
   const canReload = def.clip && w.clip < def.clip && w.reserve > 0 && a.reloadT <= 0 && a.switchT <= 0;
-  if (cmd.reload && canReload) startReload(a, def);
+  if (cmd.reload && canReload) startReload(G, a, def);
 
   if (cmd.alt) {
-    if (def.kind === 'sniper' && a.switchT <= 0 && a.reloadT <= 0) { a.scope = (a.scope + 1) % 3; audio.play('click', null, 0.4); }
+    if (def.kind === 'sniper' && a.switchT <= 0 && a.reloadT <= 0) { a.scope = (a.scope + 1) % 3; G.sound('click', a, 0.4, { owner: true }); }
     else if (def.silencer && a.switchT <= 0 && a.reloadT <= 0) {
       w.silenced = !w.silenced;
       a.switchT = 1.6;
-      audio.play('silencer', a.isBot ? { x: a.x, y: a.y + 1.4, z: a.z } : null, 0.7);
+      G.sound('silencer', a, 0.7, { pred: true });
     }
     else if (def.kind === 'knife' && G.time >= a.nextFire && a.switchT <= 0) { knifeAttack(G, a, true); a.nextFire = G.time + def.rate2; }
   }
 
-  if (a.switchT > 0) return;
+  // No attacks while the round is frozen for buying.
+  if (a.switchT > 0 || G.phase === 'freeze') return;
 
   switch (def.kind) {
     case 'knife':
@@ -299,7 +343,7 @@ export function updateWeapon(G, a, cmd, dt) {
     case 'grenade':
       if (!cmd.fire) a.needRelease = false;
       if (cmd.fire && !a.needRelease && a.throwT <= 0) {
-        a.needRelease = true; a.throwT = 0.38; audio.play('pin', a.isBot ? { x: a.x, y: a.y + 1.4, z: a.z } : null, 0.6); }
+        a.needRelease = true; a.throwT = 0.38; G.sound('pin', a, 0.6, { pred: true }); }
       if (a.throwT > 0) { a.throwT -= dt; if (a.throwT <= 0) throwNade(G, a); }
       return;
     case 'bomb':
@@ -311,23 +355,22 @@ export function updateWeapon(G, a, cmd, dt) {
   if (a.reloadT > 0 && !(def.shellReload && w.clip > 0)) return;
   if (w.clip <= 0) {
     if (pressed || def.auto) {
-      if (G.time >= (a.emptyT || 0)) { audio.play('empty', a.isBot ? { x: a.x, y: a.y + 1.4, z: a.z } : null, 0.6); a.emptyT = G.time + 0.3; }
-      if (w.reserve > 0 && a.reloadT <= 0) startReload(a, def);
+      if (G.time >= (a.emptyT || 0)) { G.sound('empty', a, 0.6, { pred: true }); a.emptyT = G.time + 0.3; }
+      if (w.reserve > 0 && a.reloadT <= 0) startReload(G, a, def);
     }
     return;
   }
   a.reloadT = 0;
   shoot(G, a, w);
   a.nextFire = G.time + def.rate;
-  if (def.kind === 'sniper' || w.key === 'm3') audio.play(def.kind === 'sniper' ? 'bolt' : 'shell', a.isBot ? { x: a.x, y: a.y + 1.4, z: a.z } : null, 0.5);
 }
 
-export function startReload(a, def) {
+export function startReload(G, a, def) {
   a.reloadT = def.reload;
   a.scope = 0;
   a.scopeRestore = undefined;
-  a.reloadStart = def.shellReload ? def.reload : def.reload;
-  audio.play('reload', a.isBot ? { x: a.x, y: a.y + 1.4, z: a.z } : null, a.isBot ? 0.5 : 0.7);
+  a.reloadSeq = (a.reloadSeq || 0) + 1;
+  G.sound('reload', a, a.isBot ? 0.5 : 0.7, { pred: true });
 }
 
 // Grenade projectiles: bounce on the heightfield and detonate.
@@ -351,7 +394,7 @@ export function updateGrenades(G, dt) {
         g.vx *= 0.65; g.vz *= 0.65;
         if (Math.abs(g.vy) < 0.8) g.vy = 0;
       } else g.y = ny;
-      if (bounced && g.t - (g.lastBounce || 0) > 0.08) { g.lastBounce = g.t; audio.play('bounce', { x: g.x, y: g.y, z: g.z }, 0.6); }
+      if (bounced && g.t - (g.lastBounce || 0) > 0.08) { g.lastBounce = g.t; G.sound('bounce', { x: g.x, y: g.y, z: g.z }, 0.6); }
     }
     const spd = Math.hypot(g.vx, g.vy, g.vz);
     if (spd < 0.5) g.still += dt;
@@ -366,11 +409,11 @@ export function updateGrenades(G, dt) {
 
 function detonate(G, g) {
   const pos = { x: g.x, y: g.y, z: g.z };
+  const p = [r4(g.x), r4(g.y), r4(g.z)];
   if (g.type === 'he') {
-    audio.play('explode', pos, 1.2);
-    G.fx.explosion(g.x, g.y, g.z, false);
+    G.sound('explode', pos, 1.2);
+    G.fire({ e: 'expl', p });
     G.noise(g.x, g.y, g.z, 60, g.owner);
-    G.shake(g.x, g.z, 14, 0.6);
     for (const a of G.actors) {
       if (!a.alive) continue;
       const d = Math.hypot(a.x - g.x, a.y + 1 - g.y, a.z - g.z);
@@ -381,9 +424,8 @@ function detonate(G, g) {
       damage(G, a, g.owner, dmg, 'blast', 0.5, 'he', { dir: [a.x - g.x, a.z - g.z] });
     }
   } else if (g.type === 'flash') {
-    audio.play('flashbang', pos, 1.1);
-    G.fx.flashLight(g.x, g.y + 0.5, g.z, 60, 0xffffff, 0.25);
-    for (let k = 0; k < 10; k++) G.fx.add.emit(g.x, g.y + 0.2, g.z, (G.rng() - 0.5) * 8, G.rng() * 6, (G.rng() - 0.5) * 8, 0.4, 0.25, 1, 1, 1, 1, 10);
+    G.sound('flashbang', pos, 1.1);
+    G.fire({ e: 'flashfx', p });
     for (const a of G.actors) {
       if (!a.alive) continue;
       const ex = a.x, ey = a.y + a.eyeHeight(), ez = a.z;
@@ -395,10 +437,10 @@ function detonate(G, g) {
       const dur = Math.max(0, 4.8 * facing * (1 - d / 32));
       if (dur < 0.25) continue;
       if (dur > a.flashT) { a.flashT = dur; a.flashMax = dur; }
-      if (a === G.player) G.onFlashed(dur);
+      if (!a.isBot) G.fire({ e: 'flashed', o: a.id, d: r4(dur) });
     }
   } else if (g.type === 'smoke') {
-    audio.play('smoke', pos, 1);
-    G.fx.smoke(g.x, g.y, g.z, 18);
+    G.sound('smoke', pos, 1);
+    G.fire({ e: 'smoke', p });
   }
 }

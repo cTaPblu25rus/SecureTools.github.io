@@ -14,6 +14,8 @@ import { audio } from './audio.js';
 import { store } from './storage.js';
 import { spreadOf, rayActor } from './combat.js';
 import { t } from './i18n.js';
+import { canHost, discover } from './net.js';
+import { HostSession, ClientSession } from './netgame.js';
 
 const params = new URLSearchParams(location.search);
 const AUTOTEST = params.has('autotest');
@@ -54,6 +56,8 @@ let camShake = 0;
 let specIndex = 0;
 let lastUse = false;
 let viewSmoothY = 0;
+let session = null;
+let found = new Map();
 const perf = { frames: 0, acc: 0, fps: 60, lowT: 0, highT: 0 };
 
 function pickQuality() {
@@ -101,11 +105,65 @@ const ui = new UI({
   onStart(setup) { startMatch(setup); },
   onResume() { setPaused(false); },
   onLeave() { leaveMatch(); },
-  onRematch() { const s = G ? G.setup : store.setup; startMatch({ ...s }); },
+  onRematch() {
+    if (session && session.role === 'host') { session.startMatch(); return; }
+    const s = G ? G.setup : store.setup;
+    startMatch({ ...s });
+  },
+  // ---------- LAN ----------
+  canHost: () => canHost(),
+  canDiscover: () => !!(bridge && bridge.netDiscover),
+  defaultIp: () => (location.protocol === 'http:' && !/^(localhost|127\.)/.test(location.hostname) ? location.host : ''),
+  onLanOpen() {
+    found = new Map();
+    ui.setFound([]);
+    discover(true, (ip, info) => {
+      found.set(ip, { ip, info, seen: performance.now() });
+      for (const [k, v] of found) if (performance.now() - v.seen > 5000) found.delete(k);
+      ui.setFound([...found.values()]);
+    });
+  },
+  onLanBack() { discover(false); ui.show('menu'); },
+  async onLanCreate(setup) {
+    discover(false);
+    const host = new HostSession(netApp);
+    session = host;
+    ui.setLobby(null, 0);
+    ui.show('lobby');
+    try {
+      await host.start(store.settings.name || t('you'), setup);
+      host.broadcastLobby();
+    } catch (e) {
+      session = null;
+      host.link.stop();
+      ui.lanError('host_failed');
+    }
+  },
+  onLanSetup(setup) { if (session && session.role === 'host') session.setSetup(setup); ui.show('lobby'); },
+  async onLanJoin(addr, name) {
+    if (!addr) { ui.lanError('conn_failed'); return; }
+    discover(false);
+    const c = new ClientSession(netApp);
+    session = c;
+    ui.setLobby(null, -1);
+    ui.show('lobby');
+    try { await c.join(addr, name); }
+    catch (e) { if (session === c) session = null; ui.lanError('conn_failed'); }
+  },
+  onLobbyTeam(team) { if (!session) return; if (session.role === 'host') session.setHostTeam(team); else session.setTeam(team); },
+  onLobbyStart() { if (session && session.role === 'host') session.startMatch(); },
+  onLobbyLeave() { endSession(); ui.show('lan'); },
+  onToLobby() {
+    if (!session || session.role !== 'host') return;
+    closeMatch();
+    session.link.broadcast({ t: 'tolobby' });
+    session.broadcastLobby();
+    ui.show('lobby');
+  },
   onSettings() { applyInputSettings(); if (store.settings.quality !== 'auto' && store.settings.quality !== quality && state === 'menu') loadMap(mapDef); resize(); },
-  onBuy(k) { if (G) G.buy(G.player, k); },
-  onRebuy() { if (G) G.rebuy(); },
-  onAutobuy() { if (G) G.autobuy(); },
+  onBuy(k) { if (!G) return; if (G.role === 'client') { session.send({ t: 'buy', k }); setTimeout(() => ui.buyOpen && ui.renderBuy(), 250); } else G.buy(G.player, k); },
+  onRebuy() { if (!G) return; if (G.role === 'client') { session.send({ t: 'rebuy' }); setTimeout(() => ui.buyOpen && ui.renderBuy(), 250); } else G.rebuy(); },
+  onAutobuy() { if (!G) return; if (G.role === 'client') { session.send({ t: 'autobuy' }); setTimeout(() => ui.buyOpen && ui.renderBuy(), 250); } else G.autobuy(); },
   onBuyOpen(open) { if (open) input.unlock(); else if (state === 'game' && !paused) input.lock(); },
   onMatchScreen() { state = 'over'; input.enabled = false; input.unlock(); },
   vibrate(ms) {
@@ -123,26 +181,73 @@ function applyInputSettings() {
 
 function startMatch(setup) {
   ui.show('loading');
-  setTimeout(() => {
-    if (G) { G.dispose(); G = null; }
-    const def = MAPS.find((m) => m.id === setup.map) || MAPS[0];
-    if (!def.modes.includes(setup.mode)) setup.mode = def.modes[0];
-    loadMap(def);
-    G = new Game({ def, scene, fx, ui, setup, playerName: t('you'), autopilot: AUTOTEST });
-    G.start();
-    ui.enterGame(G);
-    state = 'game';
-    paused = false;
-    input.reset();
-    input.enabled = true;
-    input.lock();
-    audio.startAmbience(def.theme);
-    specIndex = 0;
-    viewSmoothY = G.player.y;
-  }, 30);
+  setTimeout(() => createMatch(setup), 30);
 }
 
-function leaveMatch() {
+// Builds a match right away. net: { role: 'host', humans } or { role: 'client', roster, youId }.
+function createMatch(setup, net = null) {
+  if (G) { if (session && session.matchClosed && G.role === 'client') session.matchClosed(); G.dispose(); G = null; }
+  const def = MAPS.find((m) => m.id === setup.map) || MAPS[0];
+  if (!def.modes.includes(setup.mode)) setup.mode = def.modes[0];
+  loadMap(def);
+  const opts = { def, scene, fx, ui, setup, playerName: net ? store.settings.name || t('you') : t('you'), autopilot: AUTOTEST };
+  if (net) { opts.role = net.role; opts.humans = net.humans || []; opts.roster = net.roster || null; opts.youId = net.youId; }
+  G = new Game(opts);
+  if (!net || net.role === 'host') G.start();
+  ui.enterGame(G);
+  state = 'game';
+  paused = false;
+  input.reset();
+  input.enabled = true;
+  input.lock();
+  audio.startAmbience(def.theme);
+  specIndex = 0;
+  viewSmoothY = G.player.y;
+  return G;
+}
+
+// Callbacks the LAN sessions use.
+const netApp = {
+  startGame: (setup, net) => createMatch(setup, net),
+  onLobby(st) {
+    const me = session && session.role === 'client' ? session.myId : 0;
+    ui.setLobby(st, me);
+  },
+  toLobby() {
+    if (session && session.matchClosed) session.matchClosed();
+    closeMatch();
+    ui.show('lobby');
+  },
+  netEnded(key) {
+    const wasGame = !!G;
+    endSession();
+    if (wasGame) leaveMatch(true);
+    ui.lanError(key);
+  },
+};
+
+function endSession() {
+  if (!session) return;
+  const s = session;
+  session = null;
+  s.stop();
+}
+
+// Ends the running match but keeps the LAN session.
+function closeMatch() {
+  if (session && session.matchClosed) session.matchClosed();
+  if (G) { G.dispose(); G = null; }
+  audio.stopAmbience();
+  ui.exitGame();
+  state = 'menu';
+  paused = false;
+  input.enabled = false;
+  input.unlock();
+  setVM(null);
+}
+
+function leaveMatch(keepScreen = false) {
+  if (!keepScreen) endSession();
   if (G) { G.dispose(); G = null; }
   audio.stopAmbience();
   ui.exitGame();
@@ -153,15 +258,18 @@ function leaveMatch() {
   setVM(null);
   store.save();
   loadMap(MAPS[0]);
-  ui.show('menu');
+  if (!keepScreen) ui.show('menu');
 }
 
 function setPaused(p) {
   if (state !== 'game') return;
   paused = p;
-  if (p) { ui.closeBuy(); ui.show('pause'); input.unlock(); input.reset(); audio.stopAmbience(); }
-  else { ui.hideScreens(); input.lock(); audio.startAmbience(mapDef.theme); }
+  // A LAN match keeps running for everyone else while the menu is open.
+  if (p) { ui.closeBuy(); ui.show('pause'); input.unlock(); input.reset(); if (!isNet()) audio.stopAmbience(); }
+  else { ui.hideScreens(); input.lock(); if (!isNet()) audio.startAmbience(mapDef.theme); }
 }
+
+const isNet = () => !!(G && G.role !== 'solo');
 
 window.onAndroidBack = () => {
   if (state === 'game') {
@@ -170,10 +278,12 @@ window.onAndroidBack = () => {
     return 'handled';
   }
   if (state === 'over') { leaveMatch(); return 'handled'; }
+  if (ui.screen === 'lobby') { ui.h.onLobbyLeave(); return 'handled'; }
+  if (ui.screen === 'lan') { ui.h.onLanBack(); return 'handled'; }
   if (ui.screen && ui.screen !== 'menu') { ui.show(ui.screen === 'settings' && ui.settingsBack === 'pause' ? 'pause' : 'menu'); return 'handled'; }
   return 'exit';
 };
-window.onAndroidPause = () => { if (state === 'game' && !paused && !AUTOTEST) setPaused(true); audio.suspend(); };
+window.onAndroidPause = () => { if (state === 'game' && !paused && !AUTOTEST) setPaused(true); if (!isNet()) audio.suspend(); };
 window.onAndroidResume = () => { audio.resume(); };
 document.addEventListener('visibilitychange', () => { if (document.hidden) window.onAndroidPause(); else audio.resume(); });
 
@@ -397,10 +507,11 @@ function frame(now) {
   }
   if (state === 'game' || state === 'over') {
     handleMenuKeys();
-    if (!paused) {
-      const scale = autotest.speed;
+    if (!paused || isNet()) {
+      const scale = isNet() ? 1 : autotest.speed;
       let pc = { cmd: null, lookDX: 0, lookDY: 0 };
-      if (state === 'game') pc = playerCommand(dt);
+      if (state === 'game' && !paused) pc = playerCommand(dt);
+      else if (isNet()) pc = { cmd: { wx: 0, wz: 0 }, lookDX: 0, lookDY: 0 };
       // Spectator: tap fire to switch players.
       if (!G.player.alive && input.held.fire && !prevFireHeld) input.pressed.add('fire_tap');
       prevFireHeld = input.held.fire;
@@ -409,6 +520,8 @@ function frame(now) {
         G.update(dt * scale / steps, pc.cmd);
         if (s === 0 && pc.cmd) { pc.cmd.reload = false; pc.cmd.alt = false; pc.cmd.slot = null; pc.cmd.drop = false; pc.cmd.usePressed = false; }
       }
+      if (session && session.role === 'host' && G) session.tick(dt);
+      if (!G) { render(); return; }
       fx.update(dt * scale);
       const view = chooseView();
       G.viewActor = view || G.player;
@@ -461,6 +574,7 @@ const autotest = {
 };
 window.addEventListener('error', (e) => autotest.errors.push(String(e.message)));
 window.__game = () => G;
+window.__session = () => session;
 window.__ui = ui;
 window.__input = input;
 

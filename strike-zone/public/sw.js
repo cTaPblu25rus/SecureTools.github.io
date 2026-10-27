@@ -1,5 +1,5 @@
 // Offline support for the web/PWA build: network first, cache as fallback.
-const CACHE = 'strikezone-v2';
+const CACHE = 'strikezone-v3';
 const FILES = ['./', './index.html', './style.css', './game.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate', (e) => {

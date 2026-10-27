@@ -1,6 +1,6 @@
 {
   "name": "strike-zone",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "private": true,
   "description": "STRIKE ZONE: tactical 3D shooter for Android and web",
   "type": "module",
@@ -9,7 +9,9 @@
     "test": "node tests/unit.mjs",
     "test:e2e": "node build.mjs && node tests/e2e.mjs all",
     "icons": "node tools/make-icons.mjs",
-    "apk": "./tools/build-apk.sh"
+    "apk": "./tools/build-apk.sh",
+    "lan": "./tools/build-lan.sh && java -jar dist/strikezone-lan.jar www",
+    "test:lan": "./tools/build-lan.sh && node tests/lan.mjs && node tests/lan-e2e.mjs"
   },
   "license": "MIT",
   "dependencies": {
