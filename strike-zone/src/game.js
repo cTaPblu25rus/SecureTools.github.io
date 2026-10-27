@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { TEAM, PHYS, RULES, WEAPONS, GEAR, GUNGAME, BOT_NAMES } from './config.js';
 import { Grid, CELL, mulberry32 } from './grid.js';
-import { Actor, makeWeapon } from './actor.js';
+import { Actor, makeWeapon, modelKey } from './actor.js';
 import { BotBrain } from './bot.js';
 import { updateWeapon, updateGrenades, damage } from './combat.js';
 import { lossBonus } from './rules.js';
@@ -158,6 +158,7 @@ export class Game {
       const old = a.slots[w.slot];
       if (old) this.dropWeapon(a, w.slot, true);
       a.slots[w.slot] = makeWeapon(key);
+      if (a.brain && WEAPONS[key].silencer && this.rng() < 0.5) a.slots[w.slot].silenced = true;
       if (a.slot === w.slot) a.switchT = 0.6; else a.select(w.slot);
       if (this.mode === 'dm' && w.slot === 0 && a === this.player) this.dmChoice = key;
     }
@@ -372,7 +373,19 @@ export class Game {
     return { x: a.x + fx * fp + rx * 0.12, y: a.y + a.eyeHeight() + fy * fp - 0.12, z: a.z + fz * fp + rz * 0.12 };
   }
 
-  onShot(a, muzzle) {
+  ejectShell(a) {
+    const p = this.listenerActor;
+    if (Math.hypot(a.x - p.x, a.z - p.z) > 18) return;
+    const rx = Math.cos(a.yaw), rz = -Math.sin(a.yaw);
+    const fx = -Math.sin(a.yaw), fz = -Math.cos(a.yaw);
+    const own = a === this.viewActor;
+    const x = a.x + rx * (own ? 0.18 : 0.15) + fx * (own ? 0.35 : 0.5), y = a.y + a.eyeHeight() - (own ? 0.12 : 0.25), z = a.z + rz * (own ? 0.18 : 0.15) + fz * (own ? 0.35 : 0.5);
+    this.fx.norm.emit(x, y, z, rx * 2.2 + (this.rng() - 0.5), 1.8 + this.rng(), rz * 2.2 + (this.rng() - 0.5), 0.6, 0.035, 0.85, 0.62, 0.22, 1, 9);
+    if (own && this.rng() < 0.4) setTimeout(() => audio.play('brass', null, 0.5), 450);
+  }
+
+  onShot(a, muzzle, silenced) {
+    if (silenced) { this.ui.shot(a, true); return; }
     if (a.model && a.model.visible) { a.model.userData.flash.visible = true; a.flashOff = this.time + 0.05; a.model.userData.flash.material.rotation = this.rng() * 6; }
     if (a !== this.player || this.autopilot) this.fx.flashLight(muzzle.x, muzzle.y, muzzle.z, 2.5, 0xffc070, 0.05);
     this.ui.shot(a);
@@ -836,7 +849,7 @@ export class Game {
       if (!m.visible) continue;
       m.position.set(a.x, a.y, a.z);
       m.rotation.y = a.yaw;
-      const key = a.alive ? a.w.key : m.userData.gunKey;
+      const key = a.alive ? modelKey(a.w) : m.userData.gunKey;
       setCharacterGun(m, a.alive ? key : null);
       if (a.flashOff && this.time > a.flashOff) { m.userData.flash.visible = false; a.flashOff = 0; }
       animateCharacter(m, { speed: a.alive ? a.speed2d : 0, crouch: a.crouch, air: !a.onGround, pitch: a.pitch, dead: !a.alive, deathT: a.deathT, deathDir: a.deathDir, dt, fireT: a.fireAnim });

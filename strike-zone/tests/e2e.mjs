@@ -32,6 +32,7 @@ async function newPage(touch) {
 }
 
 async function tap(page, sel) {
+  await page.locator(sel).first().scrollIntoViewIfNeeded().catch(() => {});
   const b = await page.locator(sel).first().boundingBox();
   if (!b) throw new Error('no element ' + sel);
   await page.touchscreen.tap(b.x + b.width / 2, b.y + b.height / 2);
@@ -121,6 +122,148 @@ async function uiTest() {
   await ctx.close();
 }
 
+
+// Human-player flows driven through the real input object, with bots frozen.
+async function flowTest() {
+  console.log('Player flows');
+  const { page, errors, ctx } = await newPage(false);
+  const start = async (q) => {
+    await page.goto(`${base}index.html?speed=4&${q}`);
+    await page.waitForTimeout(600);
+    await page.evaluate((q) => {
+      const p = new URLSearchParams(q);
+      window.__ui.h.onStart({ map: p.get('map') || 'sands', mode: p.get('mode') || 'bomb', team: p.get('team') || 't', bots: 3, diff: 'normal', rounds: 2, ff: false });
+    }, q);
+    await page.waitForFunction(() => window.__game && window.__game() && window.__game().player.alive, null, { timeout: 15000 });
+    await page.evaluate(() => {
+      const G = window.__game();
+      for (const a of G.actors) if (a.brain && a !== G.player) a.brain.think = () => ({ wx: 0, wz: 0 });
+    });
+  };
+  const until = (fn, arg, ms = 45000) => page.waitForFunction(fn, arg, { timeout: ms }).then(() => true, () => false);
+
+  // Plant as T.
+  await start('team=t&map=sands');
+  await until(() => window.__game().phase === 'live');
+  await page.evaluate(() => {
+    const G = window.__game(), p = G.player;
+    for (const a of G.actors) a.hasBomb = false;
+    p.hasBomb = true;
+    const c = G.grid.center(32, 8); p.x = c.x; p.z = c.z; p.y = 0;
+    window.__input.held.use = true;
+  });
+  if (await until(() => window.__game().bomb.planted)) ok('T player plants the bomb'); else fail('T player plants the bomb');
+  await page.evaluate(() => { window.__input.held.use = false; });
+  if (shots) await page.screenshot({ path: join(out, 'flow_planted.png') });
+  // Bomb explodes and T wins the round.
+  if (await until(() => window.__game().score[0] === 1, null, 40000)) ok('bomb explosion wins the round for T'); else fail('bomb explosion wins the round for T');
+
+  // Defuse as CT with a kit.
+  await start('team=ct&map=depot');
+  await until(() => window.__game().phase === 'live');
+  await page.evaluate(() => {
+    const G = window.__game(), p = G.player;
+    const t = G.actors.find((a) => a.team === 0);
+    const c = G.grid.center(22, 5); t.x = c.x; t.z = c.z; t.y = 0; t.hasBomb = true;
+    G.plant(t, 'A');
+    t.alive = false; t.hp = 0;
+    p.kit = true; p.x = c.x + 0.6; p.z = c.z; p.y = 0;
+    window.__input.held.use = true;
+  });
+  if (await until(() => window.__game().bomb.defused)) ok('CT player defuses the bomb'); else fail('CT player defuses the bomb');
+  await page.evaluate(() => { window.__input.held.use = false; });
+  const sc = await page.evaluate(() => window.__game().score);
+  if (sc[1] >= 1) ok('defuse wins the round for CT'); else fail('defuse wins the round for CT ' + JSON.stringify(sc));
+
+  // Grenade, drop and pickup, spectating.
+  await start('team=ct&map=sands');
+  await until(() => window.__game().phase === 'live');
+  const nade = await page.evaluate(async () => {
+    const G = window.__game(), p = G.player;
+    const e = G.actors.find((a) => a.team !== p.team && a.alive);
+    const c = G.grid.center(20, 26);
+    p.x = c.x; p.z = c.z; p.y = 0; e.x = c.x; e.z = c.z - 6; e.y = 0;
+    p.yaw = 0; p.pitch = 0.1;
+    p.nades.he = 1; p.nadeKey = 'he';
+    const waitGame = async (sec) => { const t0 = G.time; while (G.time - t0 < sec) await new Promise((r) => setTimeout(r, 50)); };
+    window.__input.pressed.add('slot4');
+    await waitGame(0.2);
+    window.__input.held.fire = true;
+    await waitGame(1.2);
+    window.__input.held.fire = false;
+    const hp0 = 100;
+    await waitGame(2.5);
+    return { thrown: p.nades.he === 0, hp0, hp1: e.hp, slot: p.slot };
+  });
+  if (nade.thrown && nade.hp1 < nade.hp0) ok('HE grenade thrown and damages enemy (' + nade.hp0 + ' -> ' + nade.hp1 + ')'); else fail('HE grenade ' + JSON.stringify(nade));
+  const silence = await page.evaluate(async () => {
+    const G = window.__game(), p = G.player;
+    const waitGame = async (sec) => { const t0 = G.time; while (G.time - t0 < sec) await new Promise((r) => setTimeout(r, 50)); };
+    p.slots[1].silenced = false;
+    window.__input.pressed.add('slot2');
+    await waitGame(0.8);
+    window.__input.pressed.add('scope');
+    await waitGame(2);
+    return { silenced: p.slots[1].silenced, key: p.slots[1].key };
+  });
+  if (silence.key !== 'usp' || silence.silenced) ok('silencer toggles on USP'); else fail('silencer ' + JSON.stringify(silence));
+  const drop = await page.evaluate(async () => {
+    const G = window.__game(), p = G.player;
+    const waitGame = async (sec) => { const t0 = G.time; while (G.time - t0 < sec) await new Promise((r) => setTimeout(r, 50)); };
+    window.__input.pressed.add('slot2');
+    await waitGame(0.5);
+    window.__input.pressed.add('drop');
+    await waitGame(0.5);
+    const dropped = !p.slots[1] && G.drops.length > 0;
+    const d = G.drops[0];
+    await waitGame(1.0);
+    p.x = d.x; p.z = d.z;
+    await waitGame(1.0);
+    return { dropped, picked: !!p.slots[1] };
+  });
+  if (drop.dropped && drop.picked) ok('drop and pick up a weapon'); else fail('drop/pickup ' + JSON.stringify(drop));
+  const spec = await page.evaluate(async () => {
+    const G = window.__game(), p = G.player;
+    G.kill(p, null, 'fall');
+    await new Promise((r) => setTimeout(r, 500));
+    return { view: G.viewActor !== p && G.viewActor.alive && G.viewActor.team === p.team, specVisible: document.getElementById('spec').classList.contains('on') };
+  });
+  if (spec.view && spec.specVisible) ok('dead player spectates a teammate'); else fail('spectate ' + JSON.stringify(spec));
+  if (shots) await page.screenshot({ path: join(out, 'flow_spectate.png') });
+
+  // Match end and rematch.
+  await page.evaluate(() => { const G = window.__game(); G.score = [0, 1]; G.endRound(1, 'elim'); });
+  if (await until(() => !document.getElementById('matchEnd').classList.contains('hidden'), null, 30000)) ok('match end screen'); else fail('match end screen');
+  if (shots) await page.screenshot({ path: join(out, 'flow_matchend.png') });
+  await page.evaluate(() => document.querySelector('#matchEnd [data-a=again]').click());
+  if (await until(() => window.__game() && window.__game().round === 1 && !window.__game().over)) ok('rematch starts a new match'); else fail('rematch');
+
+  // Deathmatch respawn and free buy anywhere.
+  await start('mode=dm&map=arena');
+  const dm = await page.evaluate(async () => {
+    const G = window.__game(), p = G.player;
+    const bought = G.buy(p, 'awp');
+    G.kill(p, null, 'fall');
+    const t0 = G.time; while (G.time - t0 < 3) await new Promise((r) => setTimeout(r, 50));
+    return { bought, alive: p.alive, primary: p.slots[0] && p.slots[0].key, money: p.money };
+  });
+  if (dm.bought && dm.alive && dm.primary === 'awp') ok('deathmatch: free buy, respawn keeps chosen weapon'); else fail('deathmatch ' + JSON.stringify(dm));
+
+  // Arms race progression.
+  await start('mode=gg&map=arena');
+  const gg = await page.evaluate(async () => {
+    const G = window.__game(), p = G.player;
+    const e = G.actors.find((a) => a !== p && a.alive);
+    G.kill(e, p, 'glock');
+    await new Promise((r) => setTimeout(r, 200));
+    return { level: p.ggLevel, weapon: p.w.key };
+  });
+  if (gg.level === 1 && gg.weapon === 'usp') ok('arms race: kill advances to next weapon'); else fail('arms race ' + JSON.stringify(gg));
+
+  if (errors.length) fail('no page errors: ' + errors.slice(0, 5).join(' | ')); else ok('no page errors');
+  await ctx.close();
+}
+
 async function center(page, sel, id) {
   const b = await page.locator(sel).boundingBox();
   return { x: b.x + b.width / 2, y: b.y + b.height / 2, id };
@@ -149,6 +292,7 @@ async function matchTest(mode, map, seconds, check) {
 
 try {
   if (which === 'ui' || which === 'all') await uiTest();
+  if (which === 'flow' || which === 'all') await flowTest();
   if (which === 'bomb' || which === 'all') {
     for (const map of ['sands', 'depot']) {
       await matchTest('bomb', map, 150, (r) => {

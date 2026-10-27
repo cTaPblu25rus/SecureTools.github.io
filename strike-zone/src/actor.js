@@ -5,8 +5,11 @@ let nextId = 1;
 
 export function makeWeapon(key) {
   const def = WEAPONS[key];
-  return { key, def, clip: def.clip || 0, reserve: def.reserve || 0 };
+  return { key, def, clip: def.clip || 0, reserve: def.reserve || 0, silenced: false };
 }
+
+// Model variant for a weapon instance (silencer attached or not).
+export function modelKey(w) { return w.silenced ? w.key + '_s' : w.key; }
 
 export class Actor {
   constructor(name, team, isBot) {

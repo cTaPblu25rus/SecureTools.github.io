@@ -9,6 +9,7 @@ const SHOT = {
   rifle: { lp: 2900, dur: 0.2, thump: 110, vol: 0.7, crack: 0.65 },
   m4a1: { lp: 2000, dur: 0.16, thump: 120, vol: 0.5, crack: 0.3 },
   sniper: { lp: 2100, dur: 0.55, thump: 70, vol: 1.0, crack: 1.0 },
+  silenced: { lp: 1300, dur: 0.09, thump: 260, vol: 0.32, crack: 0.12 },
 };
 
 class Audio {
@@ -123,6 +124,7 @@ class Audio {
     if (this.busy()) return;
     let k = kind === 'pistol' ? (weaponKey === 'deagle' ? 'deagle' : 'pistol') : kind;
     if (weaponKey === 'm4a1') k = 'm4a1';
+    if (weaponKey === 'silenced') k = 'silenced';
     const s = SHOT[k];
     if (!s) return;
     const dist = pos ? Math.hypot(pos.x - this.listener.x, pos.z - this.listener.z) : 0;
@@ -158,6 +160,8 @@ class Audio {
         dur = 0.6; break;
       }
       case 'bolt': this.noiseBurst(dst, t + 0.25, 0.08, 'bandpass', 1500, 2, 0.6); this.noiseBurst(dst, t + 0.45, 0.06, 'bandpass', 2200, 2, 0.6); dur = 0.6; break;
+      case 'silencer': for (let i = 0; i < 4; i++) this.noiseBurst(dst, t + i * 0.25, 0.05, 'bandpass', 3000 - i * 300, 4, 0.3); dur = 1.1; break;
+      case 'brass': this.tone(dst, t, 4200 + Math.random() * 800, 3800, 0.05, 0.06, 'triangle'); dur = 0.08; break;
       case 'shell': this.noiseBurst(dst, t, 0.06, 'bandpass', 1300, 2, 0.5); this.tone(dst, t, 500, 300, 0.06, 0.2, 'triangle'); dur = 0.1; break;
       case 'draw': this.noiseBurst(dst, t, 0.08, 'highpass', 3000, 1, 0.25); dur = 0.1; break;
       case 'knife': this.noiseBurst(dst, t, 0.18, 'bandpass', 3200, 0.8, 0.45, 1.3); dur = 0.2; break;

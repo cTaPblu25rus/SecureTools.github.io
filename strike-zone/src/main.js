@@ -5,6 +5,7 @@ import { MAPS } from './maps.js';
 import { Grid, CELL } from './grid.js';
 import { buildWorld, buildLights } from './worldmesh.js';
 import { buildViewModel } from './models.js';
+import { modelKey } from './actor.js';
 import { FX } from './fx.js';
 import { Game } from './game.js';
 import { UI } from './ui.js';
@@ -183,7 +184,7 @@ function setVM(actor) {
     return;
   }
   const w = actor.w;
-  const key = w.key;
+  const key = modelKey(w);
   if (key === vmKey && actor.team === vmTeam && vm) return;
   if (vm) vmCamera.remove(vm);
   vm = buildViewModel(key, w.def.kind, actor.team);
@@ -240,8 +241,8 @@ function animateVM(a, dt, lookDX, lookDY) {
   vm.visible = !(a.scope > 0 && def.kind === 'sniper');
 }
 
-ui.shot = (a) => {
-  if (G && a === G.viewActor) { vmState.flashT = 0.045; }
+ui.shot = (a, silenced) => {
+  if (G && a === G.viewActor && !silenced) { vmState.flashT = 0.045; }
 };
 
 // ---------- input to commands ----------

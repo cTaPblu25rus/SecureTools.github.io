@@ -191,7 +191,7 @@ function shoot(G, a, w) {
   a.fireAnim = 1;
   a.lastShot = G.time;
   const eyeY = a.y + a.eyeHeight();
-  const spread = spreadOf(a, def);
+  const spread = spreadOf(a, def) * (w.silenced ? 0.85 : 1);
   const yaw = a.yaw + a.punchY, pitch = a.pitch + a.punchP;
   const cp = Math.cos(pitch);
   const dx = -Math.sin(yaw) * cp, dy = Math.sin(pitch), dz = -Math.cos(yaw) * cp;
@@ -199,7 +199,7 @@ function shoot(G, a, w) {
   const muzzle = G.muzzleOf(a);
   for (let p = 0; p < pellets; p++) {
     const [rx, ry, rz] = randomCone(dx, dy, dz, spread, G.rng);
-    const end = bullet(G, a, w, a.x, eyeY, a.z, rx, ry, rz, def.dmg);
+    const end = bullet(G, a, w, a.x, eyeY, a.z, rx, ry, rz, def.dmg * (w.silenced ? 0.9 : 1));
     if (p === 0 || p % 3 === 0) {
       if (!a.isBot || G.rng() < 0.5) G.fx.tracer(muzzle.x, muzzle.y, muzzle.z, end[0], end[1], end[2]);
     }
@@ -213,9 +213,10 @@ function shoot(G, a, w) {
   const side = n < 4 ? 0 : Math.sin(n * 0.5 + a.sprayPhase) * def.recoilX * 2.2;
   a.punchY = Math.max(-0.13, Math.min(0.13, a.punchY + side + (G.rng() - 0.5) * def.recoilX));
   a.viewPunch = Math.min(1, a.viewPunch + kick * 8);
-  audio.shot(w.key, def.kind, a === G.listenerActor ? null : { x: a.x, y: eyeY, z: a.z });
-  G.noise(a.x, eyeY, a.z, def.kind === 'pistol' ? 35 : 55, a);
-  G.onShot(a, muzzle);
+  audio.shot(w.silenced ? 'silenced' : w.key, def.kind, a === G.listenerActor ? null : { x: a.x, y: eyeY, z: a.z });
+  G.noise(a.x, eyeY, a.z, w.silenced ? 14 : def.kind === 'pistol' ? 35 : 55, a);
+  G.onShot(a, muzzle, w.silenced);
+  if (def.kind !== 'shotgun' && def.kind !== 'sniper') G.ejectShell(a);
   if (a.protectT > 0) a.protectT = 0;
   if (def.kind === 'sniper') { a.scopeRestore = a.scope; a.scope = 0; }
 }
@@ -281,6 +282,11 @@ export function updateWeapon(G, a, cmd, dt) {
 
   if (cmd.alt) {
     if (def.kind === 'sniper' && a.switchT <= 0 && a.reloadT <= 0) { a.scope = (a.scope + 1) % 3; audio.play('click', null, 0.4); }
+    else if (def.silencer && a.switchT <= 0 && a.reloadT <= 0) {
+      w.silenced = !w.silenced;
+      a.switchT = 1.6;
+      audio.play('silencer', a.isBot ? { x: a.x, y: a.y + 1.4, z: a.z } : null, 0.7);
+    }
     else if (def.kind === 'knife' && G.time >= a.nextFire && a.switchT <= 0) { knifeAttack(G, a, true); a.nextFire = G.time + def.rate2; }
   }
 
@@ -291,7 +297,9 @@ export function updateWeapon(G, a, cmd, dt) {
       if (cmd.fire && G.time >= a.nextFire) { knifeAttack(G, a, false); a.nextFire = G.time + def.rate; }
       return;
     case 'grenade':
-      if (pressed && a.throwT <= 0) { a.throwT = 0.38; audio.play('pin', a.isBot ? { x: a.x, y: a.y + 1.4, z: a.z } : null, 0.6); }
+      if (!cmd.fire) a.needRelease = false;
+      if (cmd.fire && !a.needRelease && a.throwT <= 0) {
+        a.needRelease = true; a.throwT = 0.38; audio.play('pin', a.isBot ? { x: a.x, y: a.y + 1.4, z: a.z } : null, 0.6); }
       if (a.throwT > 0) { a.throwT -= dt; if (a.throwT <= 0) throwNade(G, a); }
       return;
     case 'bomb':

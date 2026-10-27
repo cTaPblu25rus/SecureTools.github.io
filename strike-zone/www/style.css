@@ -217,3 +217,17 @@ input[type=range] { width: 100%; accent-color: var(--hud); height: 4vmin; }
 @keyframes rot { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
 @media (orientation: portrait) and (pointer: coarse) { body.ingame #rotate { display: flex; } }
 @media (max-aspect-ratio: 4/3) { .form { grid-template-columns: 1fr; } #buy .cats { grid-template-columns: repeat(3, 1fr); } }
+/* Centre screens without clipping their top when content is taller than the viewport. */
+.screen { justify-content: flex-start; }
+.screen > :first-child { margin-top: auto; }
+.screen > :last-child { margin-bottom: auto; }
+@media (max-height: 480px) {
+  .screen h1 { margin-bottom: 1vmin; font-size: 4vmin; }
+  .maps .mapc canvas { aspect-ratio: 2.6; }
+  .maps .mapc small { display: none; }
+  .form { gap: 1vmin 3vmin; }
+  .actions { margin-top: 1.6vmin; }
+}
+.form { width: min(1100px, 94vw); }
+.seg button { min-width: 0; white-space: nowrap; }
+.maps .mapc canvas { aspect-ratio: 2.2; }

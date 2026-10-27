@@ -16,7 +16,7 @@ cp -r www "$WORK/assets/www"
 
 # Gradle supplies these from build.gradle; the raw tools need them in the manifest.
 sed -e 's#<manifest #<manifest package="com.strikezone.game" #' \
-    -e 's#android:versionName="1.0">#android:versionName="1.0">\n    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />#' \
+    -e 's#android:versionName="1.1">#android:versionName="1.0">\n    <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="34" />#' \
     android/app/src/main/AndroidManifest.xml > "$WORK/AndroidManifest.xml"
 
 aapt package -f -M "$WORK/AndroidManifest.xml" -S android/app/src/main/res -A "$WORK/assets" \

@@ -436,7 +436,7 @@ export class UI {
     $('armor').textContent = Math.ceil(who.armor);
     $('gearIcons').textContent = (who.helmet ? '⛑' : '') + (who.kit ? '✂' : '') + (who.hasBomb ? '💣' : '');
     const w = who.w;
-    $('wname').textContent = w.def.kind === 'grenade' ? nadeName(w.def.nade) + ' ×' + who.nades[w.def.nade] : w.def.name;
+    $('wname').textContent = w.def.kind === 'grenade' ? nadeName(w.def.nade) + ' ×' + who.nades[w.def.nade] : w.def.name + (w.silenced ? (getLang() === 'ru' ? ' · глушитель' : ' · silenced') : '');
     const clipEl = $('clip');
     if (w.def.clip) {
       clipEl.textContent = w.clip; $('reserve').textContent = w.reserve > 900 ? '∞' : w.reserve;
