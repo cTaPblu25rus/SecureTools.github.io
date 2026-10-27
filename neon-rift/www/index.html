@@ -31,6 +31,7 @@
     </div>
     <div id="hCombo" class="combo"><span id="hMult">x1</span><div class="bar"><i id="hComboBar"></i></div></div>
     <div id="hPowers" class="powers"></div>
+    <div id="hBoss" class="bossbar hidden"><b id="hBossName"></b><div class="bar"><i id="hBossHp"></i></div></div>
     <div id="hBiome" class="biome-banner"></div>
     <div id="hHint" class="hint"></div>
     <div id="pops"></div>
@@ -49,6 +50,7 @@
     <div class="menu-bottom">
       <div class="best"><span data-t="best"></span> <b class="js-best">0</b></div>
       <button id="btnPlay" class="btn primary huge" data-t="play"></button>
+      <button id="btnChallenge" class="btn challenge"><b>⚡ <span data-t="challenge"></span></b><small class="js-chal"></small></button>
       <div class="menu-row">
         <button class="btn tile" data-go="sShop"><i>🚀</i><span data-t="shop"></span></button>
         <button class="btn tile" data-go="sMissions"><i>🎯</i><span data-t="missions"></span><em class="badge js-mbadge"></em></button>
@@ -108,6 +110,7 @@
   <!-- GAME OVER -->
   <section id="sOver" class="screen modal">
     <div class="card">
+      <div id="overMode" class="over-mode hidden">⚡ <span data-t="challenge"></span></div>
       <h2 class="over-title" data-t="gameover"></h2>
       <div id="overBest" class="newbest hidden" data-t="newBest"></div>
       <div class="over-score" id="overScore">0</div>

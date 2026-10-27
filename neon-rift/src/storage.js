@@ -20,6 +20,7 @@ function defaults() {
     daily: { last: '', streak: 0 },
     records: [],         // [{score, dist, date}]
     tutorialDone: false,
+    challenge: null,     // {date, best, claimed}
   };
 }
 

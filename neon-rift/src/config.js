@@ -12,6 +12,10 @@ export const MAX_SPEED = 58;
 export const KEY_TURN_SPEED = 3.4;  // rad/s for keyboard steering
 export const SPAWN_AHEAD = 190;
 export const BIOME_LENGTH = 900;
+export const BOSS_FIRST = 700;     // distance of the first Sentinel fight
+export const BOSS_EVERY = 900;
+export const CHALLENGE_GOAL = 1000; // daily challenge reward distance
+export const CHALLENGE_REWARD = 150;
 
 export const BIOMES = [
   { id: 'neon', name: { ru: 'Неоновый город', en: 'Neon City' },
@@ -67,4 +71,5 @@ export const MISSION_TEMPLATES = [
   { id: 'score', stat: 'score', base: 3000, step: 3000, reward: 90 },
   { id: 'combo', stat: 'combo', base: 3, step: 1, reward: 90 },
   { id: 'nojump', stat: 'nojump', base: 250, step: 200, reward: 100 },
+  { id: 'bosses', stat: 'bosses', base: 1, step: 1, reward: 150 },
 ];

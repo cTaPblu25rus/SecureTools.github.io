@@ -49,7 +49,7 @@ function makeTunnel(pal) {
     side: THREE.BackSide,
     uniforms: {
       uWall: { value: pal.wall }, uGrid: { value: pal.grid }, uAccent: { value: pal.accent },
-      uFog: { value: pal.fog }, uTime: { value: 0 }, uPZ: { value: 0 }, uBoost: { value: 0 },
+      uFog: { value: pal.fog }, uFogNear: { value: 25 }, uFogFar: { value: 175 }, uTime: { value: 0 }, uPZ: { value: 0 }, uBoost: { value: 0 },
     },
     vertexShader: /* glsl */`
       varying vec3 vPos;
@@ -60,7 +60,7 @@ function makeTunnel(pal) {
       }`,
     fragmentShader: /* glsl */`
       uniform vec3 uWall, uGrid, uAccent, uFog;
-      uniform float uTime, uPZ, uBoost;
+      uniform float uTime, uPZ, uBoost, uFogNear, uFogFar;
       varying vec3 vPos;
       float gridLine(float x, float w) {
         float f = abs(fract(x) - 0.5);
@@ -84,7 +84,7 @@ function makeTunnel(pal) {
         col += uGrid * grid * (0.35 + 0.4 * smoothstep(70.0, 0.0, dist));
         col += uAccent * pulse * 0.35 * (0.3 + grid);
         col += uAccent * uBoost * 0.18 * la;
-        float fog = smoothstep(25.0, 175.0, dist);
+        float fog = smoothstep(uFogNear, uFogFar, dist);
         col = mix(col, uFog, fog);
         gl_FragColor = vec4(col, 1.0);
       }`,
@@ -131,6 +131,13 @@ function iconTexture(type) {
   } else if (type === 'boost') {
     x.beginPath(); x.moveTo(8, -44); x.lineTo(-24, 6); x.lineTo(2, 6); x.lineTo(-8, 44);
     x.lineTo(26, -8); x.lineTo(0, -8); x.closePath(); x.fill();
+  } else if (type === 'core') {
+    x.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 - Math.PI / 2; const rr = i % 2 ? 18 : 46;
+      x.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+    x.closePath(); x.fill();
   } else {
     x.font = 'bold 64px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('x2', 0, 4);
   }
@@ -215,6 +222,7 @@ export class World {
 
     this.iconTex = {};
     for (const k in POWERUPS) this.iconTex[k] = iconTexture(k);
+    this.iconTex.core = iconTexture('core');
 
     this.obstacles = []; this.shards = []; this.items = [];
     this.shardPool = [];
@@ -231,6 +239,7 @@ export class World {
     for (const s of this.shards) this.releaseShard(s);
     for (const it of this.items) this.scene.remove(it.mesh);
     this.obstacles = []; this.shards = []; this.items = [];
+    this.holdAt = null;
     this.rng = mulberry32(seed);
     this.cursor = -70;
     this.nextItemAt = 350 + this.rng() * 150;
@@ -327,7 +336,7 @@ export class World {
 
   // -------- power-up items --------
   addItem(type, theta, z) {
-    const col = POWERUPS[type].color;
+    const col = type === 'core' ? 0xffffff : POWERUPS[type].color;
     const mesh = new THREE.Group();
     const cage = new THREE.Mesh(new THREE.IcosahedronGeometry(0.62, 0),
       new THREE.MeshBasicMaterial({ color: col, wireframe: true }));
@@ -346,7 +355,7 @@ export class World {
   difficulty(dist) { return Math.min(1, dist / 4500); }
 
   spawn(playerZ, dist, speed, time) {
-    while (this.cursor > playerZ - 200) {
+    while (this.cursor > playerZ - 200 && (this.holdAt === null || this.cursor > this.holdAt)) {
       const d = this.difficulty(dist + (playerZ - this.cursor));
       const reaction = lerp(1.15, 0.6, d);
       const len = this.script && this.script.length ? this.runScript() : this.pattern(d, -this.cursor, speed);

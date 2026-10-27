@@ -25,6 +25,7 @@ export class UI {
     }));
     $$('[data-back]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); g.audio.play('click'); this.back(); }));
     click('#btnPlay', () => g.startRun());
+    click('#btnChallenge', () => g.startRun('challenge'));
     click('#btnPause', () => g.pause());
     click('#btnResume', () => g.resume());
     click('#btnRestartP', () => g.startRun());
@@ -106,6 +107,8 @@ export class UI {
     const sv = this.g.save;
     $$('.js-shards').forEach((e) => { e.textContent = fmt(sv.shards); });
     $$('.js-best').forEach((e) => { e.textContent = fmt(sv.best); });
+    const ch = this.g.challengeToday();
+    $$('.js-chal').forEach((e) => { e.textContent = ch.best ? t('challengeBest', { d: fmt(ch.best) }) : t('challengeSub'); });
     const ready = (sv.missions || []).filter((m) => m.done && !m.claimed).length;
     $$('.js-mbadge').forEach((e) => { e.textContent = ready ? String(ready) : ''; });
   }
@@ -199,6 +202,7 @@ export class UI {
     $('#overShards').textContent = fmt(r.shards);
     $('#overBestVal').textContent = fmt(this.g.save.best);
     $('#overBest').classList.toggle('hidden', !isBest);
+    $('#overMode').classList.toggle('hidden', !this.g.challenge);
     $('#overMissions').innerHTML = missionsLines.map((m) => `<div class="om ${m.done ? 'done' : ''}"><span>${m.done ? '✔ ' : ''}${this.missionText(m)}</span><span>${fmt(Math.min(m.best, m.target))}/${fmt(m.target)}</span></div>`).join('');
     const rb = $('#btnRevive');
     rb.classList.toggle('hidden', !canRevive);
@@ -259,11 +263,19 @@ export class UI {
     $('#toasts').appendChild(el);
     el.addEventListener('animationend', () => el.remove());
   }
-  biome(name, color) {
+  biome(name, color) { this.banner(name, color, 'SECTOR'); }
+  banner(name, color, sub) {
     const b = $('#hBiome');
-    b.innerHTML = `${name}<small>SECTOR</small>`;
+    b.innerHTML = `${name}<small>${sub || ''}</small>`;
     b.style.color = color;
     b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+  }
+  bossBar(frac, name) {
+    const el = $('#hBoss');
+    el.classList.toggle('hidden', frac == null);
+    if (frac == null) return;
+    if (name) $('#hBossName').textContent = name;
+    $('#hBossHp').style.width = Math.max(0, frac * 100).toFixed(0) + '%';
   }
   flash() { const f = $('#flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
   caption(html, center = false) {

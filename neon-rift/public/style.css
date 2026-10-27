@@ -44,7 +44,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; touch-action: ma
 .power i { font-style: normal; font-weight: 900; width: 22px; text-align: center; }
 .power .bar { flex: 1; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.15); overflow: hidden; }
 .power .bar b { display: block; height: 100%; }
-.biome-banner { position: absolute; top: 24%; left: 0; right: 0; text-align: center; font-size: 26px; font-weight: 900; letter-spacing: 6px; text-transform: uppercase; opacity: 0; text-shadow: 0 0 18px currentColor; }
+.biome-banner { position: absolute; top: 29%; left: 0; right: 0; text-align: center; font-size: 26px; font-weight: 900; letter-spacing: 6px; text-transform: uppercase; opacity: 0; text-shadow: 0 0 18px currentColor; }
 .biome-banner.show { animation: banner 3s ease-out forwards; }
 .biome-banner small { display: block; font-size: 13px; letter-spacing: 4px; color: var(--muted); text-shadow: none; }
 @keyframes banner { 0% { opacity: 0; transform: scale(1.6); letter-spacing: 20px; } 15% { opacity: 1; transform: scale(1); letter-spacing: 6px; } 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-20px); } }
@@ -174,3 +174,15 @@ button { font-family: inherit; color: inherit; cursor: pointer; touch-action: ma
   .btn.huge { padding: 12px; font-size: 22px; }
   .shop-preview { height: 0; }
 }
+
+/* boss health bar */
+.bossbar { position: absolute; top: calc(118px + var(--safe-t)); left: 50%; transform: translateX(-50%); width: min(78%, 420px); text-align: center; animation: fadein 0.4s; }
+.bossbar b { display: block; font-size: 13px; letter-spacing: 4px; color: #ff4d6d; text-shadow: 0 0 10px #ff003c; margin-bottom: 5px; }
+.bossbar .bar { height: 10px; border-radius: 5px; background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 0, 60, 0.6); overflow: hidden; }
+.bossbar .bar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #ff003c, #ff7a00); box-shadow: 0 0 12px #ff003c; transition: width 0.3s; }
+.biome-banner small { margin-top: 4px; }
+/* daily challenge */
+.btn.challenge { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 14px; background: linear-gradient(90deg, rgba(255, 152, 0, 0.25), rgba(255, 43, 106, 0.25)); border-color: rgba(255, 180, 60, 0.6); }
+.btn.challenge b { font-size: 15px; color: #ffd54a; }
+.btn.challenge small { font-size: 11px; color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 600; }
+.over-mode { color: #ffd54a; font-weight: 800; letter-spacing: 2px; font-size: 13px; text-transform: uppercase; }

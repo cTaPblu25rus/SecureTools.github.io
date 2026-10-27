@@ -189,6 +189,35 @@ const SFX = {
     f.frequency.setValueAtTime(200, t); f.frequency.exponentialRampToValueAtTime(6000, t + 1.5);
     osc(ctx, 'sine', midi(57), t, 1.4, out, 0.15, 0.3);
   },
+  alarm(ctx, out, t) {
+    for (let i = 0; i < 3; i++) {
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(440, t + i * 0.42); o.frequency.linearRampToValueAtTime(880, t + i * 0.42 + 0.2);
+      o.frequency.linearRampToValueAtTime(440, t + i * 0.42 + 0.4);
+      env(g, t + i * 0.42, 0.02, 0.09, 0.38);
+      o.connect(g).connect(out); o.start(t + i * 0.42); o.stop(t + i * 0.42 + 0.45);
+    }
+  },
+  laser(ctx, out, t) {
+    const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.type = 'square';
+    o.frequency.setValueAtTime(1800, t); o.frequency.exponentialRampToValueAtTime(140, t + 0.22);
+    env(g, t, 0.003, 0.08, 0.22);
+    o.connect(g).connect(out); o.start(t); o.stop(t + 0.3);
+  },
+  bossHit(ctx, out, t) {
+    noiseHit(ctx, out, t, 0.35, 0.4, 'bandpass', 900, 1.5);
+    [0, 3, 7].forEach((n, i) => osc(ctx, 'square', midi(64 + n), t + i * 0.04, 0.14, out, 0.08));
+  },
+  bossDie(ctx, out, t) {
+    for (let i = 0; i < 4; i++) noiseHit(ctx, out, t + i * 0.25, 0.6, 0.5, 'lowpass', 2400 - i * 400);
+    const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(600, t); o.frequency.exponentialRampToValueAtTime(25, t + 1.4);
+    env(g, t, 0.01, 0.35, 1.4);
+    o.connect(g).connect(out); o.start(t); o.stop(t + 1.5);
+  },
   mission(ctx, out, t) { [0, 4, 7, 12].forEach((n, i) => osc(ctx, 'square', midi(79 + n), t + i * 0.08, 0.18, out, 0.07)); },
 };
 

@@ -4,7 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import {
-  SHIP_R, JUMP_V, GRAVITY, SLAM_V, BASE_SPEED, MAX_SPEED, KEY_TURN_SPEED, PLAYER_HALF_LEN,
+  CHALLENGE_GOAL, CHALLENGE_REWARD, SHIP_R, JUMP_V, GRAVITY, SLAM_V, BASE_SPEED, MAX_SPEED, KEY_TURN_SPEED, PLAYER_HALF_LEN,
   BIOMES, BIOME_LENGTH, SKINS, POWERUPS, UPGRADE_DUR, UPGRADE_COST, REVIVE_COST, DAILY_REWARDS, MISSION_TEMPLATES,
 } from './config.js';
 import { World, Palette, polar, angDiff, TAU } from './world.js';
@@ -14,6 +14,7 @@ import { AudioEngine, renderOffline } from './audio.js';
 import { Input } from './input.js';
 import { UI, fmt } from './ui.js';
 import { botThink } from './bot.js';
+import { Director } from './events.js';
 import * as store from './storage.js';
 import { t, setLang } from './i18n.js';
 
@@ -49,6 +50,7 @@ class Game {
     this.audio = new AudioEngine();
     this.input = new Input(this.canvas, () => this.save.settings);
     this.ui = new UI(this);
+    this.director = new Director(this);
     this.applyAudio();
 
     this.state = 'menu';
@@ -139,21 +141,24 @@ class Game {
   }
 
   // ---------------- runs ----------------
-  newRun(attract, seed) {
+  newRun(attract, seed, mode) {
     this.attract = attract;
-    this.world.reset(seed ?? ((Math.random() * 1e9) | 0));
+    this.challenge = mode === 'challenge';
+    seed = seed ?? ((Math.random() * 1e9) | 0);
+    this.world.reset(seed);
     this.tutorial = !attract && !this.save.tutorialDone && !DEMO;
     if (this.tutorial) this.world.useTutorial();
     this.particles.clear();
     this.run = {
       z: 0, dist: 0, theta: 0, omega: 0, h: 0, vy: 0, airborne: false, speed: BASE_SPEED,
       score: 0, shards: 0, mult: 1, combo: 0, comboTimer: 0, near: 0, jumps: 0, powerupsTaken: 0, maxMult: 1,
-      lastJumpDist: 0, noJumpBest: 0, shardChain: 0, shardChainT: 0,
+      lastJumpDist: 0, noJumpBest: 0, shardChain: 0, shardChainT: 0, bosses: 0, eventMult: 1,
       powers: { shield: 0, magnet: 0, boost: 0, x2: 0 }, powerMax: { shield: 1, magnet: 1, boost: 1, x2: 1 },
       invuln: 0, revived: false, alive: true, deadT: 0, biome: 0, completed: new Set(),
     };
     this.time = 0;
     this.camTheta = 0;
+    this.director.reset(seed);
     this.nextMilestone = 500;
     this.bestBroken = false;
     const bd = attract || DEMO ? 0 : this.save.bestDist;
@@ -164,10 +169,10 @@ class Game {
     this.player.resetTrail();
     this.timeScale = 1;
   }
-  startRun() {
+  startRun(mode) {
     this.audio.unlock();
     clearTimeout(this.ui.reviveTO);
-    this.newRun(false, DEMO ? 1234 : undefined);
+    this.newRun(false, mode === 'challenge' ? this.challengeSeed() : DEMO ? 1234 : undefined, mode);
     this.state = 'playing';
     this.botOn = DEMO;
     this.input.enabled = true; this.input.reset();
@@ -255,7 +260,7 @@ class Game {
   }
   runStat(stat) {
     const r = this.run;
-    return { dist: r.dist, shards: r.shards, near: r.near, jumps: r.jumps, powerups: r.powerupsTaken, score: r.score, combo: r.maxMult, nojump: r.noJumpBest }[stat];
+    return { dist: r.dist, shards: r.shards, near: r.near, jumps: r.jumps, powerups: r.powerupsTaken, score: r.score, combo: r.maxMult, nojump: r.noJumpBest, bosses: r.bosses }[stat];
   }
   checkMissions() {
     if (this.attract) return;
@@ -306,6 +311,16 @@ class Game {
     this.ui.flash();
   }
   reviveCost() { return REVIVE_COST; }
+  // Same seed for every player on a given day.
+  challengeSeed() {
+    let h = 2166136261;
+    for (const c of 'rift-' + today()) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+    return h >>> 0;
+  }
+  challengeToday() {
+    const c = this.save.challenge;
+    return c && c.date === today() ? c : { date: today(), best: 0, claimed: false };
+  }
   share() {
     const text = t('shareText', { d: fmt(this.run.dist), s: fmt(this.run.score) });
     if (navigator.share) navigator.share({ title: 'NEON RIFT', text }).catch(() => {});
@@ -320,6 +335,7 @@ class Game {
   // ---------------- simulation ----------------
   activatePower(type) {
     const r = this.run;
+    if (type === 'core') { this.director.hit(); return; }
     const dur = UPGRADE_DUR[type][this.save.upgrades[type]];
     r.powers[type] = dur; r.powerMax[type] = dur;
     r.powerupsTaken++;
@@ -375,7 +391,13 @@ class Game {
     sv.records = sv.records.slice(0, 10);
     if (!sv.records.includes(r.recordRef)) r.recordRef = null;
     this.persist();
-    this.ui.showOver({ score, dist: r.dist, shards: r.shards }, isBest, !r.revived && !DEMO, this.reviveCost(), sv.missions);
+    if (this.challenge) {
+      const ch = this.challengeToday();
+      ch.best = Math.max(ch.best, Math.floor(r.dist));
+      sv.challenge = ch;
+    }
+    this.persist();
+    this.ui.showOver({ score, dist: r.dist, shards: r.shards }, isBest, !r.revived && !DEMO && !this.challenge, this.reviveCost(), sv.missions);
     this.input.enabled = false;
   }
 
@@ -404,6 +426,9 @@ class Game {
     }
     this.pal.update(dt);
     this.world.update(sdt, this.time, r.z, r.speed, r.powers.boost > 0);
+    const tu = this.world.tunnel.material.uniforms;
+    tu.uFogNear.value = this.director.fogNear; tu.uFogFar.value = this.director.fogFar;
+    this.scene.fog.near = this.director.fogNear + 5; this.scene.fog.far = this.director.fogFar;
     this.particles.update(sdt);
     this.render(dt, true);
   }
@@ -416,6 +441,7 @@ class Game {
     const target = Math.min(MAX_SPEED, BASE_SPEED + r.dist * 0.0075) * (r.powers.boost > 0 ? 1.75 : 1);
     r.speed += (target - r.speed) * Math.min(1, dt * (r.powers.boost > 0 ? 3 : 1.2));
     w.spawn(r.z, r.dist, Math.min(MAX_SPEED, BASE_SPEED + r.dist * 0.0075), this.time);
+    this.director.update(dt);
 
     // steering
     const oldTheta = r.theta;
@@ -426,9 +452,11 @@ class Game {
       dTheta = Math.max(-4.2 * dt, Math.min(4.2 * dt, want * Math.min(1, dt * 9)));
       if (b.jump) inp.jumpReq = performance.now();
       if (this.attract) inp.drag = 0;
+      dTheta += this.director.drift * dt;
     } else {
       const s = this.save.settings;
       dTheta += inp.consumeDrag();
+      dTheta += this.director.drift * dt;
       dTheta += inp.keyDir * KEY_TURN_SPEED * s.sensitivity * dt;
       if (s.controls === 'tilt') dTheta += inp.tilt * KEY_TURN_SPEED * 1.2 * s.sensitivity * dt;
     }
@@ -530,7 +558,16 @@ class Game {
     if (r.comboTimer <= 0) r.combo = Math.max(0, r.combo - dt * 1.5);
     r.mult = Math.min(8, 1 + Math.floor(r.combo / 5));
     r.maxMult = Math.max(r.maxMult, r.mult);
-    r.score += (oldZ - r.z) * r.mult * (r.powers.x2 > 0 ? 2 : 1);
+    r.score += (oldZ - r.z) * r.mult * (r.powers.x2 > 0 ? 2 : 1) * r.eventMult;
+    if (this.challenge && !this.attract && r.dist >= CHALLENGE_GOAL) {
+      const ch = this.challengeToday();
+      if (!ch.claimed) {
+        ch.claimed = true; this.save.challenge = ch;
+        this.save.shards += CHALLENGE_REWARD; this.persist();
+        this.ui.toast(t('challengeReward', { n: CHALLENGE_REWARD }));
+        this.audio.play('mission');
+      }
+    }
 
     // biome
     const bi = Math.floor(r.dist / BIOME_LENGTH) % BIOMES.length;
@@ -735,7 +772,12 @@ function boot() {
         game.world.reset(dist | 0); game.world.cursor = r.z - 60;
         r.biome = Math.floor(dist / BIOME_LENGTH) % BIOMES.length;
         game.pal.snap(BIOMES[r.biome]);
+        game.director.reset(dist | 0);
+        game.director.nextBossAt = dist + 1500; game.director.nextEventAt = dist + 900;
       },
+      boss(dist) { game.director.nextBossAt = dist; },
+      bossHit() { game.director.hit(); },
+      event(type) { game.director.startEvent(type); },
       // headless balance test: simulate without rendering, report crashes
       fast(n, dt = 1 / 60) { game.noRender = true; for (let i = 0; i < n; i++) game.step(dt); game.noRender = false; },
       lastCrash() { return game.lastCrash; },
