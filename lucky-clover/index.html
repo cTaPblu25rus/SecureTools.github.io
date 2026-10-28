@@ -2,188 +2,49 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<meta name="theme-color" content="#06140d">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#2c2378">
 <title>Lucky Clover: Penny Rush</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Russo+One&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-<style>
-:root{
-  --bg:#06140d; --bg2:#0c2a1a; --felt:#0f3a24; --gold:#ffd54a; --gold2:#e8a317; --gold3:#8a5a00;
-  --text:#f4f1e6; --muted:#9fb8a8; --red:#ff4d5e; --violet:#b06bff; --blue:#3ec7ff; --green:#47e08a;
-  --cell:96px;
-}
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%}
-body{background:radial-gradient(ellipse at 50% -10%,#1d5a37 0%,var(--bg2) 35%,var(--bg) 75%);color:var(--text);
-  font-family:Inter,system-ui,sans-serif;overflow-x:hidden;user-select:none;min-height:100vh}
-#fx{position:fixed;inset:0;pointer-events:none;z-index:0}
-.app{position:relative;z-index:1;max-width:620px;margin:0 auto;padding:10px 16px 24px;display:flex;flex-direction:column;gap:10px}
-.title{text-align:center;font-family:'Lilita One','Russo One',cursive;font-size:clamp(28px,7vw,44px);line-height:1;letter-spacing:1px;
-  background:linear-gradient(180deg,#fff7c2 0%,var(--gold) 45%,var(--gold2) 70%,#a86b00 100%);-webkit-background-clip:text;background-clip:text;color:transparent;
-  filter:drop-shadow(0 3px 0 #3b2600) drop-shadow(0 0 18px rgba(255,213,74,.35))}
-.title small{display:block;font-size:.42em;letter-spacing:6px;color:var(--green);-webkit-text-fill-color:var(--green);filter:none;margin-top:4px}
-.demo{font-size:11px;text-align:center;color:var(--muted)}
-
-.jackpots{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.jp{border-radius:10px;padding:5px 4px;text-align:center;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.35)}
-.jp b{display:block;font-family:'Lilita One','Russo One',sans-serif;font-size:13px;letter-spacing:1px}
-.jp span{font-weight:800;font-size:13px}
-.jp.mini b{color:#9be7ff}.jp.minor b{color:#c59bff}.jp.major b{color:#ff9b9b}.jp.grand b{color:var(--gold)}
-.jp.grand{border-color:var(--gold2);box-shadow:0 0 14px rgba(255,213,74,.35) inset}
-.jp.hit{animation:jpHit 1s ease-in-out 3}
-@keyframes jpHit{50%{transform:scale(1.12);background:rgba(255,213,74,.4)}}
-
-.jar{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
-.jar .bar{flex:1;height:12px;border-radius:8px;background:rgba(0,0,0,.45);border:1px solid rgba(255,213,74,.3);overflow:hidden;position:relative}
-.jar .fill{height:100%;width:0;background:linear-gradient(90deg,var(--gold2),var(--gold));box-shadow:0 0 10px var(--gold);transition:width .5s}
-.jar .fill.full{animation:pulse .5s infinite alternate}
-.jar b{color:var(--gold);min-width:64px;text-align:right}
-
-.machine{position:relative;padding:10px;border-radius:22px;
-  background:linear-gradient(180deg,#c9951b,#7a4d00 40%,#5a3800);box-shadow:0 18px 50px rgba(0,0,0,.6),0 0 0 2px #ffe08a inset}
-.machine.fs{background:linear-gradient(180deg,#7f3cff,#3a137a 40%,#2a0d5c);box-shadow:0 18px 50px rgba(0,0,0,.6),0 0 0 2px #d6b8ff inset,0 0 40px rgba(176,107,255,.5)}
-.machine.hw{background:linear-gradient(180deg,#ffdf6b,#b87800 40%,#6b4300);box-shadow:0 0 60px rgba(255,213,74,.6),0 0 0 2px #fff3b0 inset}
-.screen{position:relative;border-radius:14px;overflow:hidden;background:linear-gradient(180deg,#05110a,#0b2717 50%,#05110a)}
-.reels{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;padding:4px;position:relative}
-.reel{position:relative;height:calc(var(--cell)*3);overflow:hidden;border-radius:8px;background:rgba(255,255,255,.03)}
-.reel.antic{box-shadow:0 0 0 2px var(--gold) inset,0 0 24px var(--gold) inset}
-.strip{position:absolute;left:0;right:0;top:0;will-change:transform}
-.cell{height:var(--cell);display:flex;align-items:center;justify-content:center;position:relative}
-.sym{width:88%;height:88%;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-direction:column;
-  font-size:calc(var(--cell)*.5);line-height:1;position:relative;background:radial-gradient(circle at 50% 35%,rgba(255,255,255,.12),rgba(255,255,255,0) 70%)}
-.sym .tag{font-family:'Lilita One','Russo One',sans-serif;font-size:calc(var(--cell)*.14);letter-spacing:1px;margin-top:2px}
-.sym.wild{background:radial-gradient(circle,#2fe07a 0%,#0b6b33 70%);box-shadow:0 0 12px #2fe07a;border:2px solid #b8ffd2}
-.sym.wild .tag{color:#fff;text-shadow:0 2px 0 #064}
-.sym.scatter{background:radial-gradient(circle,#ff7ad9 0%,#6a1fb8 75%);border:2px solid #ffd1f3;box-shadow:0 0 12px #ff7ad9}
-.sym.scatter .tag{color:#fff}
-.sym.seven{color:var(--red)}
-.coin{width:84%;height:84%;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column;
-  background:radial-gradient(circle at 35% 30%,#fff6c4 0%,var(--gold) 30%,var(--gold2) 65%,var(--gold3) 100%);
-  border:3px solid #fff0a8;box-shadow:0 0 0 2px #7a4d00,0 4px 10px rgba(0,0,0,.5),0 0 16px rgba(255,213,74,.5);
-  color:#4a2c00;font-weight:800;font-size:calc(var(--cell)*.2);text-shadow:0 1px 0 rgba(255,255,255,.6);position:relative}
-.coin .ic{font-size:calc(var(--cell)*.18);line-height:1}
-.coin .lbl{font-family:'Lilita One','Russo One',sans-serif;font-size:calc(var(--cell)*.13);letter-spacing:.5px}
-.coin.jp-MINI{background:radial-gradient(circle at 35% 30%,#e9fbff,#5fd2ff 40%,#0a6d9a);border-color:#cff4ff;color:#002c40}
-.coin.jp-MINOR{background:radial-gradient(circle at 35% 30%,#f3e6ff,#b06bff 40%,#4a1490);border-color:#ead6ff;color:#fff;text-shadow:0 1px 0 #000}
-.coin.jp-MAJOR{background:radial-gradient(circle at 35% 30%,#ffe6e6,#ff4d5e 40%,#8a0010);border-color:#ffd0d4;color:#fff;text-shadow:0 1px 0 #000}
-.coin.k-collect{background:radial-gradient(circle at 35% 30%,#f6e9ff,#a24dff 45%,#3b0a78);border-color:#e7cfff;color:#fff;text-shadow:0 1px 0 #000}
-.coin.k-multi{background:radial-gradient(circle at 35% 30%,#fff,#ff3d6e 45%,#7a0022);border-color:#ffc2d1;color:#fff;text-shadow:0 1px 0 #000}
-.coin.k-boost{background:radial-gradient(circle at 35% 30%,#eaffff,#3ec7ff 45%,#004f7a);border-color:#c7f1ff;color:#fff;text-shadow:0 1px 0 #000}
-.coin.k-key{background:radial-gradient(circle at 35% 30%,#efffef,#47e08a 45%,#0a5a2a);border-color:#c8ffd9;color:#fff;text-shadow:0 1px 0 #000}
-.win .sym,.win .coin{animation:winPulse .6s ease-in-out infinite alternate}
-@keyframes winPulse{to{transform:scale(1.1);filter:brightness(1.35) drop-shadow(0 0 10px var(--gold))}}
-.dim .sym,.dim .coin{filter:brightness(.35) saturate(.4);transition:filter .3s}
-.dim .win .sym,.dim .win .coin{filter:none}
-.sticky .sym{box-shadow:0 0 0 3px var(--gold),0 0 18px var(--gold)}
-.pop{animation:pop .45s cubic-bezier(.2,1.6,.4,1)}
-@keyframes pop{0%{transform:scale(0) rotate(-90deg)}100%{transform:scale(1)}}
-@keyframes pulse{to{filter:brightness(1.5)}}
-.lines{position:absolute;inset:0;pointer-events:none}
-.lines polyline{fill:none;stroke:var(--gold);stroke-width:5;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 6px var(--gold));opacity:.95}
-
-/* Hold & Win */
-.hwboard{display:none;grid-template-columns:repeat(5,1fr);gap:4px;padding:4px}
-.screen.hwmode .reels{display:none}
-.screen.hwmode .hwboard{display:grid}
-.hcell{height:var(--cell);border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,213,74,.15);display:flex;align-items:center;justify-content:center;position:relative;transition:background .3s}
-.hcell.locked{background:repeating-linear-gradient(45deg,rgba(0,0,0,.5) 0 8px,rgba(30,20,0,.6) 8px 16px);border-color:rgba(255,255,255,.08)}
-.hcell.locked::after{content:'🔒';font-size:calc(var(--cell)*.28);opacity:.6}
-.hcell.unlock{animation:unlock .8s}
-@keyframes unlock{0%{background:var(--green);box-shadow:0 0 30px var(--green)}}
-.hcell.flicker{animation:flick .25s infinite alternate}
-@keyframes flick{to{background:rgba(255,213,74,.12)}}
-.hcell.fx-collect{animation:fxc .7s}
-@keyframes fxc{50%{box-shadow:0 0 30px 6px var(--violet);transform:scale(1.12)}}
-.hcell.fx-boost{animation:fxb .7s}
-@keyframes fxb{50%{box-shadow:0 0 30px 6px var(--blue)}}
-.hcell.fx-multi{animation:fxm .7s}
-@keyframes fxm{50%{box-shadow:0 0 30px 6px var(--red);transform:scale(1.1)}}
-.hcell.grabbed .coin{animation:grab .5s}
-@keyframes grab{50%{transform:scale(.7);filter:brightness(2)}}
-.hwhud{display:none;justify-content:space-between;align-items:center;padding:6px 10px;font-family:'Lilita One','Russo One',sans-serif;letter-spacing:1px}
-.screen.hwmode + .hwhud{display:flex}
-.dots{display:flex;gap:6px}
-.dots i{width:14px;height:14px;border-radius:50%;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3)}
-.dots i.on{background:var(--gold);box-shadow:0 0 10px var(--gold)}
-.hwtotal{color:var(--gold);font-size:20px}
-
-.fshud{display:none;justify-content:space-between;align-items:center;padding:6px 10px;font-family:'Lilita One','Russo One',sans-serif;letter-spacing:1px;color:#f0e2ff}
-.machine.fs .fshud{display:flex}
-.mult{font-size:22px;color:var(--gold);text-shadow:0 0 12px var(--gold)}
-
-.msg{min-height:40px;text-align:center;font-family:'Lilita One','Russo One',sans-serif;font-size:22px;letter-spacing:1px;color:var(--gold);text-shadow:0 2px 0 #3b2600;display:flex;align-items:center;justify-content:center}
-.msg.small{font-family:Inter;font-weight:600;font-size:14px;color:var(--muted);text-shadow:none}
-
-.panel{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center}
-.box{background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:6px 10px}
-.box label{display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
-.box b{font-size:17px;font-weight:800}
-.betctl{display:flex;align-items:center;justify-content:space-between;gap:6px}
-.round{width:34px;height:34px;border-radius:50%;border:none;background:#1d4a31;color:#fff;font-size:20px;font-weight:800;cursor:pointer}
-.round:disabled{opacity:.35}
-.spin{width:92px;height:92px;border-radius:50%;border:none;cursor:pointer;position:relative;
-  background:radial-gradient(circle at 35% 30%,#fff7c2,var(--gold) 35%,var(--gold2) 70%,#8a5a00);box-shadow:0 6px 0 #5a3800,0 10px 30px rgba(255,213,74,.4);
-  font-family:'Lilita One','Russo One',sans-serif;font-size:20px;color:#4a2c00;transition:transform .1s}
-.spin:active{transform:translateY(3px);box-shadow:0 3px 0 #5a3800}
-.spin.busy{filter:grayscale(.4) brightness(.85)}
-.spin.auto{animation:pulse .6s infinite alternate}
-.row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
-.btn{border:1px solid rgba(255,255,255,.18);background:rgba(0,0,0,.4);color:var(--text);padding:9px 12px;border-radius:12px;font-weight:700;font-size:13px;cursor:pointer;font-family:Inter}
-.btn.on{background:var(--green);color:#03250f;border-color:#b8ffd2}
-.btn.gold{background:linear-gradient(180deg,var(--gold),var(--gold2));color:#3b2600;border-color:#fff0a8}
-.btn:disabled{opacity:.4;cursor:default}
-.stats{font-size:11px;color:var(--muted);text-align:center}
-
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
-.modal.open{display:flex}
-.card{background:linear-gradient(180deg,#123a26,#07180f);border:2px solid var(--gold2);border-radius:20px;padding:20px;max-width:520px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 0 50px rgba(255,213,74,.25)}
-.card h2{font-family:'Lilita One','Russo One',sans-serif;color:var(--gold);letter-spacing:1px;margin-bottom:10px;text-align:center}
-.card h3{font-family:'Lilita One','Russo One',sans-serif;color:var(--green);letter-spacing:1px;margin:14px 0 6px}
-.card p,.card li{font-size:13px;line-height:1.5;color:#dbe8df}
-.card ul{padding-left:18px}
-.choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
-.choice{border:2px solid rgba(255,255,255,.2);border-radius:16px;padding:14px 10px;text-align:center;cursor:pointer;background:rgba(0,0,0,.35);color:var(--text);font-family:Inter}
-.choice:hover{border-color:var(--gold)}
-.choice .big{font-size:40px}
-.choice b{display:block;font-family:'Lilita One','Russo One',sans-serif;font-size:17px;color:var(--gold);margin:6px 0;letter-spacing:1px}
-.choice small{display:block;font-size:12px;color:#cfe;line-height:1.4}
-.choice .price{margin-top:8px;font-weight:800;color:var(--gold)}
-.paytable{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-.pt{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.3);border-radius:10px;padding:6px}
-.pt .sym{width:48px;height:48px;font-size:26px;flex:none}
-.pt .sym .tag{font-size:9px}
-.pt div:last-child{font-size:12px;line-height:1.35}
-.x{float:right;background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer}
-
-.bigwin{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;z-index:60;background:radial-gradient(circle,rgba(60,40,0,.7),rgba(0,0,0,.85));cursor:pointer}
-.bigwin.open{display:flex}
-.bigwin .t{font-family:'Lilita One','Russo One',sans-serif;font-size:clamp(40px,12vw,84px);letter-spacing:2px;
-  background:linear-gradient(180deg,#fff,var(--gold) 50%,#b87800);-webkit-background-clip:text;background-clip:text;color:transparent;
-  filter:drop-shadow(0 4px 0 #3b2600) drop-shadow(0 0 30px var(--gold));animation:bwIn .6s cubic-bezier(.2,1.6,.4,1)}
-.bigwin .v{font-family:'Lilita One','Russo One',sans-serif;font-size:clamp(34px,9vw,60px);color:#fff;text-shadow:0 0 20px var(--gold),0 4px 0 #3b2600;margin-top:10px}
-.bigwin .sub{color:var(--muted);margin-top:14px;font-size:13px}
-@keyframes bwIn{from{transform:scale(0) rotate(-10deg)}}
-
-.flip{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:5;pointer-events:none;flex-direction:column}
-.flip.open{display:flex}
-.penny{width:150px;height:150px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:70px;
-  background:radial-gradient(circle at 35% 30%,#fff6c4,var(--gold) 30%,var(--gold2) 65%,var(--gold3));border:5px solid #fff0a8;box-shadow:0 0 50px var(--gold);animation:flipc 1.4s ease-out}
-@keyframes flipc{0%{transform:translateY(200px) rotateX(0) scale(.4)}60%{transform:translateY(-40px) rotateX(1440deg) scale(1.1)}100%{transform:translateY(0) rotateX(1800deg) scale(1)}}
-.flip .ft{font-family:'Lilita One','Russo One',sans-serif;font-size:28px;color:var(--gold);text-shadow:0 3px 0 #3b2600,0 0 20px #000;margin-top:12px;text-align:center}
-
-.gamble .coinflip{width:120px;height:120px;margin:16px auto;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:54px;
-  background:radial-gradient(circle at 35% 30%,#fff6c4,var(--gold) 30%,var(--gold2) 65%,var(--gold3));border:4px solid #fff0a8}
-.gamble .coinflip.spin{animation:gflip .9s ease-out}
-@keyframes gflip{to{transform:rotateY(1800deg)}}
-@media (max-width:420px){.spin{width:78px;height:78px;font-size:17px}.box b{font-size:15px}}
-</style>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Rubik:wght@500;700;800;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+<div class="scene" aria-hidden="true">
+  <div class="sky"></div>
+  <div class="stars"></div>
+  <div class="sun"></div>
+  <svg class="bgbow" viewBox="0 0 1000 520" id="bgbow"></svg>
+  <div class="cloud c1"></div><div class="cloud c2"></div><div class="cloud c3"></div><div class="cloud c4"></div>
+  <svg class="hills" viewBox="0 0 1000 300" preserveAspectRatio="none">
+    <path d="M0 120Q120 40 260 100T540 80T820 90T1000 60V300H0Z" fill="#7fc98a" opacity=".75"/>
+    <path d="M0 170Q160 90 340 150T680 130T1000 120V300H0Z" fill="#4fae62"/>
+    <path d="M0 220Q200 150 420 200T820 190T1000 180V300H0Z" fill="#2f8f47"/>
+    <path d="M0 220Q200 150 420 200T820 190T1000 180" fill="none" stroke="#8be39b" stroke-width="3" opacity=".6"/>
+    <path d="M0 265Q250 225 520 258T1000 245V300H0Z" fill="#1d6d33"/>
+  </svg>
+</div>
 <canvas id="fx"></canvas>
-<div class="app">
-  <div class="title">LUCKY CLOVER<small>PENNY RUSH</small></div>
-  <div class="demo">Демо-игра на виртуальные кредиты · без реальных денег · 18+</div>
+
+<div class="game">
+  <div class="top">
+    <svg class="logo" viewBox="0 0 300 130" aria-label="Lucky Clover: Penny Rush">
+      <defs><path id="logoArc" d="M14 84Q150 14 286 84"/></defs>
+      <text font-size="40" fill="url(#gGoldV)" stroke="#4a1f00" stroke-width="8" paint-order="stroke" stroke-linejoin="round">
+        <textPath href="#logoArc" startOffset="50%" text-anchor="middle" textLength="262" lengthAdjust="spacingAndGlyphs">LUCKY CLOVER</textPath></text>
+      <text font-size="40" fill="none" stroke="#fff7c9" stroke-width="1.1" stroke-opacity=".6">
+        <textPath href="#logoArc" startOffset="50%" text-anchor="middle" textLength="262" lengthAdjust="spacingAndGlyphs">LUCKY CLOVER</textPath></text>
+      <path d="M60 92H240L232 104L240 116H60L68 104Z" fill="url(#gGreenH)" stroke="#ffd54a" stroke-width="2.5" stroke-linejoin="round"/>
+      <text x="150" y="110.5" font-size="17" text-anchor="middle" fill="#fff" stroke="#06300f" stroke-width="3.5" paint-order="stroke" letter-spacing="4">PENNY RUSH</text>
+    </svg>
+    <div id="lepTop"></div>
+    <div class="jar" id="jar" title="Каждая монета в базовой игре падает в горшочек. 300 монет = гарантированный Hold & Win">
+      <svg viewBox="0 0 100 100"><use href="#s-potbig"/></svg>
+      <div class="bar"><div class="fill" id="jarFill"></div></div><b id="jarText">0/300</b>
+    </div>
+  </div>
 
   <div class="jackpots">
     <div class="jp mini" id="jp-MINI"><b>MINI</b><span></span></div>
@@ -192,743 +53,128 @@ body{background:radial-gradient(ellipse at 50% -10%,#1d5a37 0%,var(--bg2) 35%,va
     <div class="jp grand" id="jp-GRAND"><b>GRAND</b><span></span></div>
   </div>
 
-  <div class="jar" title="Каждая монета в базовой игре падает в копилку. Полная копилка = гарантированный Hold & Win">
-    🫙 Копилка <div class="bar"><div class="fill" id="jarFill"></div></div><b id="jarText">0/300</b>
-  </div>
+  <div class="tip" id="tip"></div>
 
-  <div class="machine" id="machine">
-    <div class="fshud"><span id="fsLeft">ФРИСПИНЫ: 0</span><span class="mult" id="fsMult"></span><span id="fsWin">0</span></div>
+  <div class="hud hwh"><span class="lbl">РЕСПИНЫ</span><div class="pips" id="pips"><i>1</i><i>2</i><i>3</i></div><span class="val" id="hwTotal">0</span></div>
+  <div class="hud fsh"><span class="lbl" id="fsLeft">ФРИСПИН</span><div class="orb" id="fsOrb">x1</div><span class="val" id="fsWin">0</span></div>
+
+  <div class="frame" id="frame">
+    <svg class="corner tl" viewBox="0 0 100 100"><use href="#s-clover"/></svg>
+    <svg class="corner tr" viewBox="0 0 100 100"><use href="#s-clover"/></svg>
+    <svg class="corner bl" viewBox="0 0 100 100"><use href="#s-clover"/></svg>
+    <svg class="corner br" viewBox="0 0 100 100"><use href="#s-clover"/></svg>
     <div class="screen" id="screen">
       <div class="reels" id="reels"></div>
       <div class="hwboard" id="hwboard"></div>
+      <div class="stickyLayer" id="stickyLayer"></div>
       <svg class="lines" id="lines"></svg>
-      <div class="flip" id="flip"><div class="penny" id="penny">🍀</div><div class="ft" id="flipText"></div></div>
-    </div>
-    <div class="hwhud"><span>РЕСПИНЫ</span><div class="dots" id="dots"><i></i><i></i><i></i></div><span class="hwtotal" id="hwTotal">0</span></div>
-  </div>
-
-  <div class="msg small" id="msg">Нажми SPIN или пробел. 6+ монет = Hold &amp; Win, 3+ 🌈 = фриспины</div>
-
-  <div class="panel">
-    <div class="box"><label>Баланс</label><b id="balance">0</b></div>
-    <button class="spin" id="spinBtn">SPIN</button>
-    <div class="box"><label>Ставка</label>
-      <div class="betctl"><button class="round" id="betDown">−</button><b id="bet">10</b><button class="round" id="betUp">+</button></div>
+      <div class="flip" id="flip">
+        <div class="bigcoin" id="bigcoin">
+          <div class="face front"><svg viewBox="0 0 100 100"><use href="#c-gold"/></svg><svg class="ic" viewBox="0 0 100 100"><use href="#s-clover"/></svg></div>
+          <div class="face back"><svg viewBox="0 0 100 100"><use href="#c-gold"/></svg><svg class="ic" viewBox="0 0 100 100"><use href="#s-star"/></svg></div>
+        </div>
+        <div class="ft" id="flipText"></div>
+      </div>
     </div>
   </div>
 
-  <div class="row">
-    <button class="btn" id="anteBtn" title="Ставка x1.5, монет и радуг выпадает заметно больше">Шанс x2</button>
-    <button class="btn" id="autoBtn">Авто</button>
-    <button class="btn" id="turboBtn">⚡ Турбо</button>
-    <button class="btn gold" id="buyBtn">Купить бонус</button>
-    <button class="btn" id="gambleBtn" disabled>🪙 Удвоить</button>
-    <button class="btn" id="infoBtn">ℹ️</button>
-    <button class="btn" id="soundBtn">🔊</button>
+  <div class="msg" id="msg">ДЕЛАЙТЕ ВАШИ СТАВКИ!</div>
+
+  <div class="plaques">
+    <button class="plaque" data-buy="fs"><small>Купить<br>фриспины</small><b id="price-fs"></b></button>
+    <button class="plaque" data-buy="hw"><small>Купить<br>Hold &amp; Win</small><b id="price-hw"></b></button>
+    <button class="plaque" data-buy="super"><small>Super<br>Hold &amp; Win</small><b id="price-super"></b></button>
+    <button class="plaque ante" id="anteBtn"><small>Шанс x2<br>на бонус</small><span class="toggle"></span></button>
   </div>
+
+  <div class="controls">
+    <button class="round" id="betDown" aria-label="Уменьшить ставку">−</button>
+    <button class="spin" id="spinBtn" aria-label="Крутить">
+      <svg viewBox="0 0 100 100"><g fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round">
+        <path d="M78 40A30 30 0 0 0 24 34"/><path d="M22 60A30 30 0 0 0 76 66"/></g>
+        <path d="M14 22L28 42L36 24Z" fill="#fff"/><path d="M86 78L72 58L64 76Z" fill="#fff"/></svg>
+      <span class="autoN" id="autoN"></span>
+    </button>
+    <button class="round" id="betUp" aria-label="Увеличить ставку">+</button>
+  </div>
+  <div class="tools">
+    <button class="tool" id="autoBtn">АВТО</button>
+    <button class="tool" id="turboBtn">⚡ ТУРБО</button>
+    <button class="tool" id="gambleBtn" disabled>x2 РИСК</button>
+    <button class="tool" id="infoBtn" aria-label="Правила">i</button>
+    <button class="tool" id="soundBtn" aria-label="Звук">🔊</button>
+  </div>
+  <div class="credit"><div>КРЕДИТ <span id="balance">0</span></div><div>СТАВКА <span id="bet">0</span></div></div>
   <div class="stats" id="stats"></div>
+  <div class="demo">Демо-игра на виртуальные кредиты · без реальных денег · 18+</div>
 </div>
 
 <div class="modal" id="fsModal"><div class="card">
-  <h2>🌈 ФРИСПИНЫ: <span id="fsCount">8</span></h2>
-  <p style="text-align:center">Выбери, как будет играть удача</p>
+  <h2>ВЫБЕРИ УДАЧУ!</h2>
+  <p style="text-align:center"><b id="fsCount">8</b> фриспинов — как будет играть лепрекон?</p>
   <div class="choices">
-    <button class="choice" data-mode="sticky"><div class="big">🍀</div><b>ЛИПКИЕ WILD</b><small>Каждый выпавший wild остаётся на месте до конца фриспинов</small></button>
-    <button class="choice" data-mode="multi"><div class="big">✖️</div><b>РАСТУЩИЙ МНОЖИТЕЛЬ</b><small>Множитель линий x1 → x2 → x3… растёт каждый спин</small></button>
+    <button class="choice" data-mode="sticky"><svg viewBox="0 0 100 100"><use href="#s-wild"/></svg><b>ЛИПКИЕ WILD</b><small>Каждый выпавший wild остаётся на месте до конца фриспинов</small></button>
+    <button class="choice" data-mode="multi"><svg viewBox="0 0 100 100"><use href="#c-orange"/><text x="50" y="62" text-anchor="middle" font-family="Rubik" font-weight="900" font-size="32" fill="#fff" stroke="#4a1800" stroke-width="4" paint-order="stroke">x+1</text></svg><b>РАСТУЩИЙ МНОЖИТЕЛЬ</b><small>Множитель линий x1 → x2 → x3… растёт каждый спин</small></button>
   </div>
-</div></div>
-
-<div class="modal" id="buyModal"><div class="card">
-  <button class="x" data-close>×</button>
-  <h2>КУПИТЬ БОНУС</h2>
-  <div class="choices" style="grid-template-columns:1fr">
-    <button class="choice" data-buy="hw"><b>🪙 HOLD &amp; WIN</b><small>Старт с 6 монетами, 3 респина</small><div class="price" id="price-hw"></div></button>
-    <button class="choice" data-buy="super"><b>💜 SUPER HOLD &amp; WIN</b><small>8 монет, Сборщик на поле и сразу 4 ряда</small><div class="price" id="price-super"></div></button>
-    <button class="choice" data-buy="fs"><b>🌈 10 ФРИСПИНОВ</b><small>С выбором режима</small><div class="price" id="price-fs"></div></button>
-  </div>
-</div></div>
-
-<div class="modal gamble" id="gambleModal"><div class="card" style="text-align:center">
-  <h2>ОРЁЛ ИЛИ РЕШКА?</h2>
-  <p>На кону: <b id="gStake" style="color:var(--gold)"></b> → <b id="gTo" style="color:var(--green)"></b></p>
-  <div class="coinflip" id="gCoin">🍀</div>
-  <div class="row"><button class="btn gold" data-g="heads">🍀 Клевер</button><button class="btn gold" data-g="tails">⭐ Звезда</button><button class="btn" data-g="take">Забрать</button></div>
-  <p id="gMsg" style="margin-top:10px"></p>
 </div></div>
 
 <div class="modal" id="autoModal"><div class="card" style="text-align:center">
   <button class="x" data-close>×</button>
   <h2>АВТОИГРА</h2>
-  <div class="row" id="autoOpts"></div>
-  <p style="margin-top:10px">Остановится на любом бонусе или выигрыше от x50</p>
+  <div class="rowc" id="autoOpts"></div>
+  <p style="margin-top:12px">Остановится на любом бонусе или выигрыше от x50</p>
+</div></div>
+
+<div class="modal" id="gambleModal"><div class="card" style="text-align:center">
+  <h2>КЛЕВЕР ИЛИ ЗВЕЗДА?</h2>
+  <p>На кону <b id="gStake" style="color:#ffd54a"></b> → <b id="gTo" style="color:#3fd77a"></b></p>
+  <div class="gcoin" id="gCoin">
+    <div class="face front"><svg viewBox="0 0 100 100"><use href="#c-gold"/></svg><svg class="ic" viewBox="0 0 100 100"><use href="#s-clover"/></svg></div>
+    <div class="face back"><svg viewBox="0 0 100 100"><use href="#c-gold"/></svg><svg class="ic" viewBox="0 0 100 100"><use href="#s-star"/></svg></div>
+  </div>
+  <div class="rowc"><button class="btn" data-g="heads">🍀 Клевер</button><button class="btn" data-g="tails">⭐ Звезда</button><button class="btn ghost" data-g="take">Забрать</button></div>
+  <p id="gMsg" style="margin-top:10px"></p>
 </div></div>
 
 <div class="modal" id="infoModal"><div class="card">
   <button class="x" data-close>×</button>
   <h2>ПРАВИЛА</h2>
-  <p>5 барабанов, 3 ряда, 10 линий. Выигрыши слева направо, по ставке на линию (ставка / 10). Максимальный выигрыш — <b>x1000</b> ставки за спин или бонус. Теоретический RTP ≈ 96%.</p>
+  <p>5 барабанов, 3 ряда, 10 линий, выигрыши слева направо. Максимальный выигрыш — <b>x1000</b> ставки за спин или бонус. Теоретический RTP ≈ 96%.</p>
   <h3>ВЫПЛАТЫ (x ставки за 3 / 4 / 5)</h3>
   <div class="paytable" id="paytable"></div>
-  <h3>🪙 HOLD &amp; WIN</h3>
+  <h3>HOLD &amp; WIN</h3>
   <ul>
-    <li>6+ монет в любом месте — монеты фиксируются, даётся 3 респина. Каждая новая монета сбрасывает счётчик обратно на 3.</li>
-    <li><b style="color:var(--violet)">СБОРЩИК</b> — забирает себе сумму всех монет на поле.</li>
-    <li><b style="color:var(--red)">x2</b> — удваивает все монеты на поле.</li>
-    <li><b style="color:var(--blue)">БУСТ +N</b> — добавляет своё значение каждой монете.</li>
-    <li><b style="color:var(--green)">🔑 КЛЮЧ</b> — открывает новый ряд сверху (до 5 рядов, 25 ячеек).</li>
-    <li>Джекпоты: MINI x20, MINOR x50, MAJOR x200. Заполни все 15 нижних ячеек — <b style="color:var(--gold)">GRAND x1000</b>.</li>
+    <li>6+ монет — монеты фиксируются, даётся 3 респина. Каждая новая монета сбрасывает счётчик на 3.</li>
+    <li><b style="color:#c27bff">СБОРЩИК</b> забирает себе сумму всех монет на поле.</li>
+    <li><b style="color:#ffab45">x2</b> удваивает все монеты на поле.</li>
+    <li><b style="color:#4fd5ff">БУСТ</b> добавляет своё значение каждой монете.</li>
+    <li><b style="color:#55e693">КЛЮЧ</b> открывает новый ряд сверху (до 5 рядов, 25 ячеек).</li>
+    <li>Джекпоты MINI x20, MINOR x50, MAJOR x200. Заполни все 15 нижних ячеек — <b style="color:#ffd54a">GRAND x1000</b>.</li>
   </ul>
-  <h3>🌈 ФРИСПИНЫ</h3>
-  <ul><li>3 / 4 / 5 радуг — 8 / 12 / 20 фриспинов. Ретриггер +5. Выбор режима: липкие wild или растущий множитель. Монеты во фриспинах тоже запускают Hold &amp; Win.</li></ul>
-  <h3>🎲 ФИЧИ БАЗОВОЙ ИГРЫ</h3>
+  <h3>ФРИСПИНЫ</h3>
+  <ul><li>3 / 4 / 5 горшков — 8 / 12 / 20 фриспинов, ретриггер +5. На выбор: липкие wild или растущий множитель. Монеты во фриспинах тоже запускают Hold &amp; Win.</li></ul>
+  <h3>ФИЧИ</h3>
   <ul>
-    <li><b>Подброс пенни</b> — случайно в любом спине. Клевер: 1–2 барабана становятся WILD. Звезда: на поле падает дождь из 2–5 монет.</li>
-    <li><b>Копилка</b> — каждая монета копится. 300 монет — гарантированный Hold &amp; Win.</li>
+    <li><b>Подброс пенни</b> — случайно в любом спине. Клевер: 1–2 барабана становятся WILD. Звезда: на поле падает 2–5 монет.</li>
+    <li><b>Горшочек-копилка</b> — каждая монета в базе копится, 300 монет — гарантированный Hold &amp; Win.</li>
     <li><b>Шанс x2</b> — ставка x1.5, бонусы приходят примерно в 2 раза чаще.</li>
-    <li><b>Удвоение</b> — после выигрыша в базе угадай сторону монеты (50/50), до 5 раз подряд.</li>
+    <li><b>Риск</b> — после выигрыша в базе угадай сторону монеты (50/50), до 5 раз подряд.</li>
   </ul>
-  <p style="margin-top:12px;color:var(--muted)">Это демо на виртуальные кредиты, которые нельзя купить или вывести. Кнопка ниже сбрасывает баланс.</p>
-  <div class="row" style="margin-top:10px"><button class="btn" id="resetBtn">Сбросить баланс до 10 000</button></div>
+  <p style="margin-top:12px;opacity:.7">Демо на виртуальные кредиты, их нельзя купить или вывести.</p>
+  <div class="rowc" style="margin-top:10px"><button class="btn" id="resetBtn">Сбросить баланс до 10 000</button></div>
 </div></div>
 
-<div class="bigwin" id="bigwin"><div class="t" id="bwTitle">BIG WIN</div><div class="v" id="bwVal">0</div><div class="sub">нажми, чтобы продолжить</div></div>
+<div class="bigwin" id="bigwin"><div class="rays"></div><div class="t" id="bwTitle">BIG WIN</div><div class="v" id="bwVal">0</div><div id="bwLep"></div><div class="sub">нажми, чтобы продолжить</div></div>
 
+<div class="cine" id="cine">
+  <svg class="stage" id="stage" viewBox="0 0 600 800" preserveAspectRatio="xMidYMid meet"></svg>
+  <div class="title" id="cineTitle"><b id="cineMain"></b><span id="cineSub"></span></div>
+  <div class="whiteout" id="whiteout"></div>
+  <div class="hint">нажми, чтобы ускорить</div>
+</div>
+
+<script src="art.js"></script>
 <script src="engine.js"></script>
-<script>
-(function () {
-'use strict';
-const E = window.SlotEngine;
-const rng = E.cryptoRng();
-const $ = id => document.getElementById(id);
-const BETS = [10, 20, 50, 100, 200, 500, 1000];
-const EMOJI = { cherry: '🍒', lemon: '🍋', orange: '🍊', grapes: '🍇', bell: '🔔', diamond: '💎', seven: '7️⃣', wild: '🍀', scatter: '🌈' };
-const FILLER = ['cherry', 'lemon', 'orange', 'grapes', 'bell', 'diamond', 'seven', 'cherry', 'lemon', 'coin'];
-const STORE = 'luckyClover.v1';
-
-// --- Состояние --------------------------------------------------------------
-const S = { balance: 10000, betIdx: 2, ante: false, turbo: false, sound: true, jar: 0,
-  spins: 0, wagered: 0, won: 0, best: 0 };
-try { Object.assign(S, JSON.parse(localStorage.getItem(STORE) || '{}')); } catch (e) {}
-const save = () => { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {} };
-let busy = false, auto = 0, skip = false, lastWin = 0, shownBalance = S.balance;
-let currentGrid = null;
-
-const bet = () => BETS[S.betIdx];
-const cost = () => bet() * (S.ante ? E.ANTE_COST : 1);
-const fmt = n => {
-  n = Math.round(n * 100) / 100;
-  return n.toLocaleString('ru-RU', { maximumFractionDigits: 2 });
-};
-const short = n => n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + 'M' : n >= 1e4 ? (n / 1e3).toFixed(n >= 1e5 ? 0 : 1) + 'K' : fmt(n);
-const sleep = ms => new Promise(r => setTimeout(r, skip ? ms * 0.15 : S.turbo ? ms * 0.5 : ms));
-
-// --- Звук (WebAudio-синтез, без файлов) -------------------------------------
-let ac = null;
-function tone(freq, dur, type, vol, delay) {
-  if (!S.sound) return;
-  try {
-    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
-    const t = ac.currentTime + (delay || 0);
-    const o = ac.createOscillator(), g = ac.createGain();
-    o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t);
-    g.gain.setValueAtTime(vol || 0.08, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(ac.destination); o.start(t); o.stop(t + dur);
-  } catch (e) {}
-}
-const sfx = {
-  stop: () => tone(140, 0.12, 'triangle', 0.12),
-  coin: () => { tone(1320, 0.15, 'square', 0.04); tone(1760, 0.2, 'square', 0.04, 0.06); },
-  win: () => [523, 659, 784].forEach((f, i) => tone(f, 0.18, 'triangle', 0.08, i * 0.08)),
-  big: () => [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, 0.3, 'square', 0.05, i * 0.1)),
-  tick: () => tone(900 + Math.random() * 300, 0.04, 'square', 0.02),
-  antic: () => tone(220, 0.6, 'sawtooth', 0.03),
-  boom: () => { tone(80, 0.5, 'sawtooth', 0.12); tone(60, 0.7, 'sine', 0.15); },
-  scatter: () => [784, 988, 1175].forEach((f, i) => tone(f, 0.25, 'sine', 0.08, i * 0.07)),
-};
-
-// --- Рендер символов --------------------------------------------------------
-function coinHTML(c, b) {
-  b = b || bet();
-  if (c.kind === 'jp') return `<div class="coin jp-${c.jp}"><span class="lbl">${c.jp}</span><span>${short(c.v * b)}</span></div>`;
-  if (c.kind === 'collect') return `<div class="coin k-collect"><span class="ic">💜</span><span class="lbl">СБОР</span>${c.v ? `<span>${short(c.v * b)}</span>` : ''}</div>`;
-  if (c.kind === 'multi') return `<div class="coin k-multi"><span class="lbl">x2</span>${c.v ? `<span>${short(c.v * b)}</span>` : ''}</div>`;
-  if (c.kind === 'boost') return `<div class="coin k-boost"><span class="lbl">БУСТ</span><span>+${short(c.v * b)}</span></div>`;
-  if (c.kind === 'key') return `<div class="coin k-key"><span class="ic">🔑</span><span>${short(c.v * b)}</span></div>`;
-  return `<div class="coin"><span>${short(c.v * b)}</span></div>`;
-}
-function symHTML(cell) {
-  if (cell.s === 'coin') return coinHTML(cell.coin);
-  const tag = cell.s === 'wild' ? '<span class="tag">WILD</span>' : cell.s === 'scatter' ? '<span class="tag">BONUS</span>' : '';
-  return `<div class="sym ${cell.s}">${EMOJI[cell.s]}${tag}</div>`;
-}
-function randomCell() {
-  const s = FILLER[Math.floor(Math.random() * FILLER.length)];
-  return s === 'coin' ? { s, coin: E.randomCoin(Math.random) } : { s };
-}
-
-// --- Барабаны -----------------------------------------------------------------
-const reelsEl = $('reels');
-const reels = [];
-function layout() {
-  // ширина .app минус её padding, рамка автомата, padding и зазоры барабанов
-  const inner = document.querySelector('.app').clientWidth - 32;
-  const cell = Math.min(104, Math.floor((inner - 20 - 8 - 16) / 5));
-  document.documentElement.style.setProperty('--cell', cell + 'px');
-  drawLinesClear();
-}
-function buildReels() {
-  reelsEl.innerHTML = '';
-  for (let x = 0; x < 5; x++) {
-    const r = document.createElement('div'); r.className = 'reel';
-    const strip = document.createElement('div'); strip.className = 'strip';
-    r.appendChild(strip); reelsEl.appendChild(r); reels.push({ el: r, strip });
-  }
-  currentGrid = E.genGrid(Math.random, E.BASE_WEIGHTS);
-  renderGrid(currentGrid);
-}
-function renderGrid(grid, sticky) {
-  grid.forEach((col, x) => {
-    reels[x].strip.style.transition = 'none';
-    reels[x].strip.style.transform = 'translateY(0)';
-    reels[x].strip.innerHTML = col.map((c, y) => {
-      const st = sticky && sticky.some(([a, b]) => a === x && b === y) ? ' sticky' : '';
-      return `<div class="cell${st}">${symHTML(c)}</div>`;
-    }).join('');
-  });
-}
-function cellEl(x, y) { return reels[x].strip.children[y]; }
-function cellH() { return reels[0].el.clientHeight / 3; }
-
-async function spinReels(grid, opts) {
-  opts = opts || {};
-  clearHighlights();
-  const h = cellH();
-  const prev = currentGrid;
-  const turbo = S.turbo || skip;
-  const baseLen = turbo ? 6 : 14;
-  let scat = 0, coins = 0, anticFrom = 99;
-  const stops = [];
-  for (let x = 0; x < 5; x++) {
-    // Нагнетание: 2 радуги или 4+ монеты до последних барабанов — оставшиеся крутятся дольше.
-    const extra = x >= anticFrom ? (turbo ? 6 : 16) : 0;
-    const n = baseLen + x * (turbo ? 2 : 4) + extra;
-    const cells = grid[x].map(c => symHTML(c));
-    for (let i = 0; i < n; i++) cells.push(symHTML(randomCell()));
-    for (const c of prev[x]) cells.push(symHTML(c));
-    const strip = reels[x].strip;
-    strip.style.transition = 'none';
-    strip.innerHTML = cells.map((c, y) => {
-      const st = y < 3 && opts.sticky && opts.sticky.some(([a, b]) => a === x && b === y) ? ' sticky' : '';
-      return `<div class="cell${st}">${c}</div>`;
-    }).join('');
-    strip.style.transform = `translateY(${-(n + 3) * h}px)`;
-    const dur = (turbo ? 260 : 520) + x * (turbo ? 90 : 170) + extra * (turbo ? 30 : 55);
-    stops.push({ x, dur, antic: extra > 0 });
-    for (const c of grid[x]) { if (c.s === 'scatter') scat++; if (c.s === 'coin') coins++; }
-    if (anticFrom === 99 && x < 4 && (scat >= 2 || coins >= 4)) anticFrom = x + 1;
-  }
-  void reelsEl.offsetHeight;
-  const ticker = setInterval(sfx.tick, 70);
-  await Promise.all(stops.map(({ x, dur, antic }) => new Promise(res => {
-    const strip = reels[x].strip;
-    if (antic) setTimeout(() => { reels[x].el.classList.add('antic'); sfx.antic(); }, Math.max(0, dur - 900));
-    strip.style.transition = `transform ${dur}ms cubic-bezier(.25,.1,.25,1.12)`;
-    strip.style.transform = 'translateY(0)';
-    setTimeout(() => {
-      reels[x].el.classList.remove('antic');
-      sfx.stop();
-      if (grid[x].some(c => c.s === 'coin')) sfx.coin();
-      if (grid[x].some(c => c.s === 'scatter')) sfx.scatter();
-      while (strip.children.length > 3) strip.removeChild(strip.lastChild);
-      res();
-    }, skip ? Math.min(dur, 150) : dur);
-  })));
-  clearInterval(ticker);
-  currentGrid = grid;
-}
-
-// --- Линии и подсветка ------------------------------------------------------
-const svg = $('lines');
-function drawLinesClear() { svg.innerHTML = ''; }
-function clearHighlights() {
-  drawLinesClear();
-  reelsEl.classList.remove('dim');
-  reelsEl.querySelectorAll('.win').forEach(e => e.classList.remove('win'));
-}
-function centerOf(x, y) {
-  const sr = $('screen').getBoundingClientRect();
-  const r = cellEl(x, y).getBoundingClientRect();
-  return [r.left - sr.left + r.width / 2, r.top - sr.top + r.height / 2];
-}
-function showWins(lines, extraCells) {
-  const sr = $('screen').getBoundingClientRect();
-  svg.setAttribute('viewBox', `0 0 ${sr.width} ${sr.height}`);
-  svg.innerHTML = lines.map(w => {
-    const pts = E.LINES[w.line].map((y, x) => centerOf(x, y).join(',')).join(' ');
-    return `<polyline points="${pts}"/>`;
-  }).join('');
-  const cells = new Set();
-  lines.forEach(w => w.cells.forEach(([x, y]) => cells.add(x + ',' + y)));
-  (extraCells || []).forEach(([x, y]) => cells.add(x + ',' + y));
-  if (!cells.size) return;
-  for (let x = 0; x < 5; x++) for (let y = 0; y < 3; y++) {
-    const el = cellEl(x, y);
-    if (cells.has(x + ',' + y)) el.classList.add('win');
-  }
-  reelsEl.classList.add('dim');
-}
-
-// --- HUD --------------------------------------------------------------------
-function updateHUD() {
-  $('bet').textContent = fmt(cost());
-  $('balance').textContent = fmt(shownBalance);
-  for (const jp of ['MINI', 'MINOR', 'MAJOR', 'GRAND']) $('jp-' + jp).querySelector('span').textContent = short(E.JACKPOTS[jp] * bet());
-  $('jarFill').style.width = Math.min(100, 100 * S.jar / E.JAR_SIZE) + '%';
-  $('jarFill').classList.toggle('full', S.jar >= E.JAR_SIZE * 0.85);
-  $('jarText').textContent = `${S.jar}/${E.JAR_SIZE}`;
-  $('anteBtn').classList.toggle('on', S.ante);
-  $('turboBtn').classList.toggle('on', S.turbo);
-  $('soundBtn').textContent = S.sound ? '🔊' : '🔇';
-  $('autoBtn').textContent = auto ? `Стоп (${auto === Infinity ? '∞' : auto})` : 'Авто';
-  $('autoBtn').classList.toggle('on', !!auto);
-  $('spinBtn').classList.toggle('busy', busy);
-  $('spinBtn').classList.toggle('auto', !!auto);
-  $('betUp').disabled = busy || S.betIdx >= BETS.length - 1;
-  $('betDown').disabled = busy || S.betIdx <= 0;
-  $('buyBtn').disabled = busy;
-  $('anteBtn').disabled = busy;
-  $('gambleBtn').disabled = busy || !lastWin;
-  for (const k of ['hw', 'super', 'fs']) $('price-' + k).textContent = fmt(E.BUY[k].cost * bet()) + ` (x${E.BUY[k].cost})`;
-  const rtp = S.wagered ? (100 * S.won / S.wagered).toFixed(1) + '%' : '—';
-  $('stats').textContent = `Спинов: ${S.spins} · Ставок: ${fmt(S.wagered)} · Выиграно: ${fmt(S.won)} · Ваш RTP: ${rtp} · Рекорд: x${fmt(S.best)}`;
-}
-function msg(text, small) {
-  const m = $('msg'); m.innerHTML = text; m.classList.toggle('small', !!small);
-}
-async function countTo(el, from, to, ms) {
-  const t0 = performance.now();
-  ms = skip ? 100 : S.turbo ? ms / 2 : ms;
-  return new Promise(res => {
-    const step = t => {
-      const k = Math.min(1, (t - t0) / ms);
-      el.textContent = fmt(from + (to - from) * (1 - Math.pow(1 - k, 3)));
-      if (k < 1) requestAnimationFrame(step); else res();
-    };
-    requestAnimationFrame(step);
-  });
-}
-function credit(amount) {
-  S.balance += amount; S.won += amount;
-  save();
-}
-async function settleBalance() {
-  const from = shownBalance; shownBalance = S.balance;
-  if (from !== shownBalance) await countTo($('balance'), from, shownBalance, 600);
-  updateHUD();
-}
-
-// --- Большой выигрыш --------------------------------------------------------
-async function bigWin(x, amount) {
-  if (x < 10) return;
-  const tiers = [[100, 'ЛЕГЕНДА!'], [50, 'EPIC WIN'], [25, 'MEGA WIN'], [10, 'BIG WIN']];
-  const title = x >= 1000 ? 'МАКС x1000!' : tiers.find(t => x >= t[0])[1];
-  const bw = $('bigwin');
-  $('bwTitle').textContent = title;
-  bw.classList.add('open');
-  sfx.big(); burst(120);
-  let closed = false;
-  const close = () => { closed = true; };
-  bw.onclick = close;
-  await countTo($('bwVal'), 0, amount, Math.min(4000, 1200 + x * 15));
-  const t0 = Date.now();
-  while (!closed && Date.now() - t0 < (auto ? 1500 : 4000)) await new Promise(r => setTimeout(r, 100));
-  bw.classList.remove('open');
-}
-
-// --- Подброс пенни -----------------------------------------------------------
-async function showFlip(res) {
-  const f = $('flip');
-  $('penny').textContent = res.flip.side === 'heads' ? '🍀' : '⭐';
-  $('flipText').textContent = '';
-  f.classList.add('open'); sfx.boom();
-  await sleep(1400);
-  $('flipText').textContent = res.flip.side === 'heads' ? 'КЛЕВЕР! WILD-БАРАБАН' : 'ЗВЕЗДА! МОНЕТНЫЙ ДОЖДЬ';
-  sfx.big();
-  await sleep(900);
-  f.classList.remove('open');
-  // Превращаем ячейки в итоговые с анимацией.
-  for (let x = 0; x < 5; x++) for (let y = 0; y < 3; y++) {
-    const a = res.preGrid[x][y], b = res.grid[x][y];
-    if (a.s === b.s && (a.s !== 'coin' || a.coin === b.coin)) continue;
-    const el = cellEl(x, y);
-    el.innerHTML = symHTML(b);
-    el.firstChild.classList.add('pop');
-    b.s === 'coin' ? sfx.coin() : sfx.stop();
-    await sleep(140);
-  }
-  currentGrid = res.grid;
-  await sleep(300);
-}
-
-// --- Hold & Win -------------------------------------------------------------
-const hwEl = $('hwboard');
-function hwRender(board, rows, b) {
-  hwEl.innerHTML = '';
-  for (let y = E.MAX_ROWS - 1; y >= 0; y--) for (let x = 0; x < 5; x++) {
-    const i = y * 5 + x;
-    const d = document.createElement('div');
-    d.className = 'hcell' + (y >= rows ? ' locked' : '');
-    d.dataset.i = i;
-    if (board[i]) d.innerHTML = coinHTML(board[i], b);
-    hwEl.appendChild(d);
-  }
-}
-const hcell = i => hwEl.querySelector(`[data-i="${i}"]`);
-function hwDots(n) { [...$('dots').children].forEach((d, i) => d.classList.toggle('on', i < n)); }
-
-async function playHW(hw, b, intro) {
-  const machine = $('machine'), screen = $('screen');
-  msg(intro || '🪙 HOLD &amp; WIN! 🪙');
-  sfx.big(); burst(60);
-  await sleep(900);
-  clearHighlights();
-  machine.classList.add('hw'); screen.classList.add('hwmode');
-  let rows = hw.startRows;
-  const board = new Array(E.MAX_ROWS * 5).fill(null);
-  for (const s of hw.start) board[s.y * 5 + s.x] = s.coin;
-  hwRender(board, rows, b);
-  hwDots(3);
-  let total = hw.start.reduce((a, s) => a + s.coin.v, 0);
-  $('hwTotal').textContent = fmt(total * b);
-  await sleep(800);
-  for (const st of hw.steps) {
-    const empty = [...hwEl.querySelectorAll('.hcell:not(.locked)')].filter(c => !c.innerHTML);
-    empty.forEach(c => c.classList.add('flicker'));
-    hwDots(0);
-    await sleep(650);
-    empty.forEach(c => c.classList.remove('flicker'));
-    // Новые монеты приземляются (в исходном виде, до эффектов).
-    for (const i of st.landed) {
-      const c = hcell(i);
-      const raw = Object.assign({}, st.board[i]);
-      const eff = st.effects.find(e => e.at === i);
-      if (eff && eff.type === 'collect') raw.v -= eff.sum;
-      if (eff && eff.type === 'unlock') raw.kind = 'key';
-      c.innerHTML = coinHTML(raw, b);
-      c.firstChild.classList.add('pop');
-      sfx.coin();
-      await sleep(260);
-    }
-    for (const e of st.effects) {
-      const c = hcell(e.at);
-      if (e.type === 'unlock') {
-        msg('🔑 НОВЫЙ РЯД ОТКРЫТ!'); sfx.scatter();
-        rows = e.rows;
-        for (let x = 0; x < 5; x++) { const u = hcell((rows - 1) * 5 + x); u.classList.remove('locked'); u.classList.add('unlock'); }
-      } else if (e.type === 'boost') {
-        msg(`⚡ БУСТ: +${fmt(e.add * b)} к каждой монете!`); c.classList.add('fx-boost'); tone(660, .4, 'sawtooth', .05);
-      } else if (e.type === 'multi') {
-        msg('✖️ ВСЕ МОНЕТЫ x2!'); c.classList.add('fx-multi'); sfx.boom();
-      } else if (e.type === 'collect') {
-        msg(`💜 СБОРЩИК ЗАБИРАЕТ ${fmt(e.sum * b)}!`); c.classList.add('fx-collect');
-        hwEl.querySelectorAll('.hcell').forEach(h => { if (h !== c && h.innerHTML) h.classList.add('grabbed'); });
-        sfx.big();
-      }
-      await sleep(700);
-      hwEl.querySelectorAll('.grabbed').forEach(h => h.classList.remove('grabbed'));
-    }
-    // Синхронизируем значения с итоговым состоянием шага.
-    st.board.forEach((coin, i) => { if (coin) { const c = hcell(i); if (c) c.innerHTML = coinHTML(coin, b); } });
-    const from = total; total = st.total;
-    if (total !== from) countTo($('hwTotal'), from * b, total * b, 500);
-    hwDots(st.respins);
-    if (st.landed.length) msg(`🪙 +${st.landed.length} ${st.landed.length === 1 ? 'монета' : 'монеты'} · респины снова 3`);
-    else msg(`Респинов осталось: ${st.respins}`, true);
-    await sleep(st.landed.length ? 500 : 250);
-  }
-  hwDots(0);
-  // Джекпоты на поле подсвечиваем в верхней панели.
-  const last = hw.steps.length ? hw.steps[hw.steps.length - 1].board : board;
-  last.forEach(c => { if (c && c.kind === 'jp') $('jp-' + c.jp).classList.add('hit'); });
-  if (hw.grand) {
-    $('jp-GRAND').classList.add('hit');
-    msg('🏆 ПОЛЕ ЗАПОЛНЕНО — GRAND JACKPOT! 🏆'); sfx.big(); burst(200);
-    await sleep(2000);
-  }
-  msg(`Hold &amp; Win: ${fmt(hw.total * b)}${hw.capped ? ' (макс x1000)' : ''}`);
-  $('hwTotal').textContent = fmt(hw.total * b);
-  await sleep(1400);
-  setTimeout(() => document.querySelectorAll('.jp.hit').forEach(j => j.classList.remove('hit')), 3000);
-  machine.classList.remove('hw'); screen.classList.remove('hwmode');
-  renderGrid(currentGrid);
-  return hw.total;
-}
-
-// --- Фриспины ---------------------------------------------------------------
-function chooseMode(count) {
-  $('fsCount').textContent = count;
-  const m = $('fsModal');
-  m.classList.add('open');
-  return new Promise(res => {
-    m.querySelectorAll('[data-mode]').forEach(btn => btn.onclick = () => { m.classList.remove('open'); res(btn.dataset.mode); });
-  });
-}
-async function playFS(count, b, ante) {
-  sfx.big(); burst(80);
-  msg(`🌈 ${count} ФРИСПИНОВ! 🌈`);
-  await sleep(1000);
-  const mode = await chooseMode(count);
-  const fs = E.playFreeSpins(rng, count, mode, ante);
-  const machine = $('machine');
-  machine.classList.add('fs');
-  let total = 0;
-  $('fsWin').textContent = '0';
-  for (let i = 0; i < fs.spins.length; i++) {
-    const sp = fs.spins[i];
-    $('fsLeft').textContent = `ФРИСПИН ${i + 1} · ОСТАЛОСЬ ${sp.left}`;
-    $('fsMult').textContent = mode === 'multi' ? 'x' + sp.mult : `🍀 ${sp.sticky.length}`;
-    msg(mode === 'multi' ? `Множитель x${sp.mult}` : 'Липкие wild держатся!', true);
-    await spinReels(sp.grid, { sticky: mode === 'sticky' ? sp.sticky : null });
-    if (sp.lines.length) {
-      showWins(sp.lines);
-      sfx.win();
-      msg(`+${fmt(sp.lineWin * b)}${sp.mult > 1 ? ` (x${sp.mult})` : ''}`);
-      await sleep(1100);
-    }
-    if (sp.retrigger) { msg(`🌈 +${sp.retrigger} ФРИСПИНОВ!`); sfx.big(); await sleep(1200); }
-    if (sp.hw) {
-      machine.classList.remove('fs');
-      await playHW(sp.hw, b);
-      machine.classList.add('fs');
-    }
-    const from = total;
-    total = sp.runningTotal;
-    if (total !== from) await countTo($('fsWin'), from * b, total * b, 400);
-    await sleep(350);
-  }
-  msg(`Фриспины: ${fmt(fs.total * b)}${fs.capped ? ' (макс x1000)' : ''}`);
-  await sleep(1300);
-  machine.classList.remove('fs');
-  clearHighlights();
-  return fs.total;
-}
-
-// --- Основной цикл ---------------------------------------------------------
-async function doSpin() {
-  if (busy) { skip = true; return; }
-  const c = cost(), b = bet();
-  if (S.balance < c) { msg('Недостаточно кредитов — сбрось баланс в ℹ️', true); auto = 0; updateHUD(); return; }
-  busy = true; skip = false; lastWin = 0;
-  S.balance -= c; S.wagered += c; S.spins++;
-  shownBalance = S.balance;
-  const res = E.spinBase(rng, S, { ante: S.ante });
-  save(); updateHUD();
-  msg('&nbsp;', true);
-
-  await spinReels(res.preGrid || res.grid);
-  if (res.flip) await showFlip(res);
-
-  let win = 0;
-  if (res.lines.length) {
-    win += res.lineWin;
-    showWins(res.lines);
-    sfx.win();
-    msg(`Выигрыш ${fmt(res.lineWin * b)}`);
-    await sleep(1000);
-  }
-  updateHUD();
-  if (res.jarFull) {
-    msg('🫙 КОПИЛКА ПОЛНА!'); burst(60); sfx.big();
-    await sleep(1200);
-  }
-  if (res.hw) {
-    showWins([], res.coins);
-    await sleep(700);
-    win += await playHW(res.hw, b, res.jarFull ? '🫙 КОПИЛКА ЗАПУСКАЕТ HOLD &amp; WIN!' : null);
-  }
-  if (res.fs) {
-    showWins([], res.scatters);
-    await sleep(900);
-    win += await playFS(res.fs, b, S.ante);
-  }
-  win = Math.min(win, E.MAX_WIN);
-  await finishRound(win, c, b, !!(res.hw || res.fs));
-}
-
-async function finishRound(win, paid, b, feature) {
-  const amount = win * b;
-  if (amount > 0) {
-    credit(amount);
-    const x = amount / paid;
-    S.best = Math.max(S.best, Math.round(x * 100) / 100);
-    save();
-    await bigWin(x, amount);
-    msg(`Выигрыш ${fmt(amount)}${x >= 1 ? ` · x${fmt(Math.round(x * 100) / 100)}` : ''}`);
-    lastWin = feature ? 0 : amount;
-    if (auto && (feature || x >= 50)) auto = 0;
-  } else {
-    msg('Удачи в следующем спине!', true);
-  }
-  await settleBalance();
-  busy = false; skip = false;
-  updateHUD();
-  if (auto) {
-    if (auto !== Infinity) auto--;
-    updateHUD();
-    if (auto) setTimeout(doSpin, S.turbo ? 150 : 400);
-  }
-}
-
-async function buyBonus(kind) {
-  const b = bet(), price = E.BUY[kind].cost * b;
-  if (S.balance < price) { msg('Недостаточно кредитов', true); return; }
-  $('buyModal').classList.remove('open');
-  busy = true; skip = false; lastWin = 0;
-  S.balance -= price; S.wagered += price; S.spins++;
-  shownBalance = S.balance; save(); updateHUD();
-  let win;
-  if (kind === 'fs') win = await playFS(10, b, false);
-  else win = await playHW(E.buyHoldAndWin(rng, kind), b, kind === 'super' ? '💜 SUPER HOLD &amp; WIN! 💜' : null);
-  await finishRound(Math.min(win, E.MAX_WIN), price, b, true);
-}
-
-// --- Удвоение -----------------------------------------------------------------
-let gRounds = 0;
-function openGamble() {
-  if (!lastWin || busy) return;
-  gRounds = 0;
-  $('gMsg').textContent = 'До 5 раз подряд, шанс 50/50';
-  gambleUI();
-  $('gambleModal').classList.add('open');
-}
-function gambleUI() {
-  $('gStake').textContent = fmt(lastWin);
-  $('gTo').textContent = fmt(lastWin * 2);
-  const capped = lastWin * 2 > E.MAX_WIN * bet() || gRounds >= 5;
-  $('gambleModal').querySelectorAll('[data-g="heads"],[data-g="tails"]').forEach(btn => btn.disabled = capped || !lastWin);
-}
-async function gamble(pick) {
-  const coinEl = $('gCoin');
-  if (pick === 'take' || !lastWin) { $('gambleModal').classList.remove('open'); updateHUD(); return; }
-  const side = rng() < 0.5 ? 'heads' : 'tails';
-  coinEl.classList.remove('spin'); void coinEl.offsetWidth; coinEl.classList.add('spin');
-  $('gambleModal').querySelectorAll('button').forEach(btn => btn.disabled = true);
-  sfx.tick();
-  await new Promise(r => setTimeout(r, 900));
-  coinEl.textContent = side === 'heads' ? '🍀' : '⭐';
-  // Выигрыш уже зачислен на баланс: удвоение ставит его на кон целиком.
-  if (side === pick) {
-    gRounds++;
-    credit(lastWin);
-    lastWin *= 2;
-    $('gMsg').textContent = `Угадал! Теперь ${fmt(lastWin)}`;
-    sfx.big(); burst(40);
-  } else {
-    credit(-lastWin);
-    $('gMsg').textContent = 'Не повезло…';
-    lastWin = 0;
-    tone(180, .5, 'sawtooth', .08);
-  }
-  shownBalance = S.balance;
-  $('gambleModal').querySelectorAll('button').forEach(btn => btn.disabled = false);
-  gambleUI();
-  updateHUD();
-  if (!lastWin) setTimeout(() => $('gambleModal').classList.remove('open'), 900);
-}
-
-// --- Частицы на фоне ----------------------------------------------------------
-const cv = $('fx'), cx = cv.getContext('2d');
-const parts = [];
-function resizeFx() { cv.width = innerWidth * devicePixelRatio; cv.height = innerHeight * devicePixelRatio; }
-function burst(n) {
-  for (let i = 0; i < n; i++) parts.push({
-    x: innerWidth / 2 + (Math.random() - .5) * 200, y: innerHeight * .45,
-    vx: (Math.random() - .5) * 14, vy: -Math.random() * 16 - 4, r: 6 + Math.random() * 8,
-    rot: Math.random() * 6, life: 1, c: Math.random() < .8 ? 'coin' : 'clover',
-  });
-}
-for (let i = 0; i < 25; i++) parts.push({ x: Math.random() * innerWidth, y: Math.random() * innerHeight, vx: 0, vy: .3 + Math.random() * .5, r: 3 + Math.random() * 4, rot: 0, life: 1, ambient: true, c: 'coin' });
-function frame() {
-  const d = devicePixelRatio;
-  cx.setTransform(d, 0, 0, d, 0, 0);
-  cx.clearRect(0, 0, innerWidth, innerHeight);
-  for (let i = parts.length - 1; i >= 0; i--) {
-    const p = parts[i];
-    if (p.ambient) {
-      p.y += p.vy; if (p.y > innerHeight + 10) { p.y = -10; p.x = Math.random() * innerWidth; }
-      cx.globalAlpha = .18;
-    } else {
-      p.vy += .45; p.x += p.vx; p.y += p.vy; p.rot += .2; p.life -= .008;
-      if (p.y > innerHeight + 30 || p.life <= 0) { parts.splice(i, 1); continue; }
-      cx.globalAlpha = Math.min(1, p.life * 2);
-    }
-    cx.save(); cx.translate(p.x, p.y); cx.rotate(p.rot);
-    if (p.c === 'coin') {
-      cx.scale(Math.abs(Math.cos(p.rot)) * .8 + .2, 1);
-      const g = cx.createRadialGradient(-p.r * .3, -p.r * .3, 1, 0, 0, p.r);
-      g.addColorStop(0, '#fff6c4'); g.addColorStop(.5, '#ffd54a'); g.addColorStop(1, '#8a5a00');
-      cx.fillStyle = g; cx.beginPath(); cx.arc(0, 0, p.r, 0, Math.PI * 2); cx.fill();
-    } else {
-      cx.fillStyle = '#2fe07a';
-      for (let k = 0; k < 4; k++) { cx.rotate(Math.PI / 2); cx.beginPath(); cx.arc(p.r * .45, 0, p.r * .45, 0, Math.PI * 2); cx.fill(); }
-    }
-    cx.restore();
-  }
-  cx.globalAlpha = 1;
-  requestAnimationFrame(frame);
-}
-
-// --- Таблица выплат ---------------------------------------------------------
-function buildPaytable() {
-  const order = ['wild', 'seven', 'diamond', 'bell', 'grapes', 'orange', 'lemon', 'cherry'];
-  $('paytable').innerHTML = order.map(s => {
-    const p = E.SYMBOLS[s].pays.map(v => 'x' + fmt(v / 10)).join(' / ');
-    return `<div class="pt">${symHTML({ s })}<div>${s === 'wild' ? '<b>WILD</b> — заменяет всё, кроме монет и радуги<br>' : ''}${p}</div></div>`;
-  }).join('') + `<div class="pt">${symHTML({ s: 'scatter' })}<div><b>РАДУГА</b><br>3+ = фриспины</div></div>`
-    + `<div class="pt"><div class="sym"><div class="coin"><span>★</span></div></div><div><b>МОНЕТА</b><br>x1–x50 или джекпот. 6+ = Hold &amp; Win</div></div>`;
-}
-
-// --- События ----------------------------------------------------------------
-$('spinBtn').onclick = () => { if (auto && busy) { auto = 0; updateHUD(); skip = true; return; } doSpin(); };
-addEventListener('keydown', e => {
-  if (e.code === 'Space' && !document.querySelector('.modal.open')) { e.preventDefault(); doSpin(); }
-});
-$('betUp').onclick = () => { if (!busy && S.betIdx < BETS.length - 1) { S.betIdx++; save(); renderGrid(currentGrid); updateHUD(); } };
-$('betDown').onclick = () => { if (!busy && S.betIdx > 0) { S.betIdx--; save(); renderGrid(currentGrid); updateHUD(); } };
-$('anteBtn').onclick = () => { if (!busy) { S.ante = !S.ante; save(); updateHUD(); } };
-$('turboBtn').onclick = () => { S.turbo = !S.turbo; save(); updateHUD(); };
-$('soundBtn').onclick = () => { S.sound = !S.sound; save(); updateHUD(); };
-$('infoBtn').onclick = () => $('infoModal').classList.add('open');
-$('buyBtn').onclick = () => { if (!busy && !auto) $('buyModal').classList.add('open'); };
-$('gambleBtn').onclick = openGamble;
-$('autoBtn').onclick = () => {
-  if (auto) { auto = 0; updateHUD(); return; }
-  $('autoModal').classList.add('open');
-};
-$('autoOpts').innerHTML = [10, 25, 50, 100, Infinity].map(n => `<button class="btn gold" data-n="${n}">${n === Infinity ? '∞' : n}</button>`).join('');
-$('autoOpts').onclick = e => {
-  const n = e.target.dataset && e.target.dataset.n;
-  if (!n) return;
-  auto = n === 'Infinity' ? Infinity : Number(n);
-  $('autoModal').classList.remove('open');
-  updateHUD();
-  if (!busy) doSpin();
-};
-document.querySelectorAll('[data-buy]').forEach(b => b.onclick = () => buyBonus(b.dataset.buy));
-document.querySelectorAll('[data-g]').forEach(b => b.onclick = () => gamble(b.dataset.g));
-document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => b.closest('.modal').classList.remove('open'));
-document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => {
-  if (e.target === m && m.id !== 'fsModal' && m.id !== 'gambleModal') m.classList.remove('open');
-}));
-$('resetBtn').onclick = () => {
-  Object.assign(S, { balance: 10000, jar: 0, spins: 0, wagered: 0, won: 0, best: 0 });
-  shownBalance = S.balance; lastWin = 0; save(); updateHUD();
-  $('infoModal').classList.remove('open');
-};
-addEventListener('resize', () => { layout(); resizeFx(); });
-
-layout(); resizeFx(); buildReels(); buildPaytable(); updateHUD(); frame();
-})();
-</script>
+<script src="game.js"></script>
 </body>
 </html>
