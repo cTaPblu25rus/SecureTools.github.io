@@ -21,10 +21,12 @@ func _ready() -> void:
 		p.max_distance = 260.0
 		p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_INVERSE_DISTANCE
 		p.max_polyphony = 1
+		p.bus = "SFX"
 		add_child(p)
 		pool3d.append(p)
 	for i in 10:
 		var p := AudioStreamPlayer.new()
+		p.bus = "SFX"
 		add_child(p)
 		pool2d.append(p)
 	music = _loop_player("music", -9.0)
@@ -35,12 +37,12 @@ func _loop_player(n: String, db: float) -> AudioStreamPlayer:
 	var p := AudioStreamPlayer.new()
 	p.stream = streams[n]
 	p.volume_db = db
+	p.bus = "Music" if n == "music" else "SFX"
 	add_child(p)
 	return p
 
 func set_enabled(on: bool) -> void:
 	enabled = on
-	AudioServer.set_bus_mute(0, not on)
 
 func play3(n: String, pos: Vector3, db := 0.0, pitch_var := 0.06) -> void:
 	if not enabled or not streams.has(n):

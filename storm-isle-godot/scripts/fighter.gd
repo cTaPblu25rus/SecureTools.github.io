@@ -18,6 +18,14 @@ var cur := 0
 var reserve := 0
 var meds := 0
 var grenades := 0
+var bandages := 0
+var smokes := 0
+var boost_t := 0.0
+var heal_kind := "med"
+var heal_max := 2.3
+var mat_shirt: StandardMaterial3D
+var mat_pants: StandardMaterial3D
+var mat_helmet: StandardMaterial3D
 var fire_cd := 0.0
 var reload_t := 0.0
 var reload_max := 1.0
@@ -143,6 +151,8 @@ func _build_model(c1: Color, c2: Color, skin: Color) -> void:
 	add_child(model)
 	var shirt := _mat(c1)
 	var pants := _mat(c2, 0.8)
+	mat_shirt = shirt
+	mat_pants = pants
 	var sk := _mat(skin, 0.55)
 	var dark := _mat(Color("#20222A"), 0.5, 0.2)
 	var visor := _mat(Color("#121820"), 0.08, 0.8)
@@ -162,7 +172,8 @@ func _build_model(c1: Color, c2: Color, skin: Color) -> void:
 	head.position.y = 0.84
 	torso.add_child(head)
 	_part(_sph(0.17), sk, Vector3.ZERO, head, Vector3.ZERO, Vector3(1, 1.08, 1))
-	_part(_sph(0.185, true), (_mat(Color("#FFB627"), 0.4) if is_player else pants), Vector3(0, 0.03, 0.01), head)
+	mat_helmet = _mat(c1.lightened(0.15), 0.4) if is_player else pants
+	_part(_sph(0.185, true), mat_helmet, Vector3(0, 0.03, 0.01), head)
 	_part(_cap(0.055, 0.28), visor, Vector3(0, 0.02, -0.145), head, Vector3(0, 0, PI / 2))
 	arm_r = _arm(0.29, shirt, sk)
 	arm_l = _arm(-0.29, shirt, sk)
@@ -180,6 +191,12 @@ func _build_model(c1: Color, c2: Color, skin: Color) -> void:
 	for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
 		_part(_cyl(0.015, 2.9), line, Vector3(c.x * 0.9, 2.75, c.y * 0.9), chute, Vector3(c.y * 0.36, 0, -c.x * 0.36))
 	chute.visible = false
+
+func set_outfit(c1: Color, c2: Color) -> void:
+	mat_shirt.albedo_color = c1
+	mat_pants.albedo_color = c2
+	if mat_helmet != mat_pants:
+		mat_helmet.albedo_color = c1.lightened(0.15)
 
 func _arm(x: float, shirt: Material, sk: Material) -> Node3D:
 	var a := Node3D.new()
@@ -241,7 +258,7 @@ static func make_gun(id: String, rarity: int) -> Node3D:
 
 # ------------------------------------------------------------------ состояние
 func reset() -> void:
-	hp = 100.0; armor = 0.0; alive = true; slots = [null, null]; cur = 0; reserve = 0; meds = 0; grenades = 0
+	hp = 100.0; armor = 0.0; alive = true; slots = [null, null]; cur = 0; reserve = 0; meds = 0; grenades = 0; bandages = 0; smokes = 0; boost_t = 0.0
 	fire_cd = 0.0; reload_t = 0.0; heal_t = 0.0; dash_cd = 0.0; dome_cd = 0.0; dash_t = 0.0; state = "sky"
 	kills = 0; dmg_dealt = 0.0; flash_t = 0.0; dead_t = 0.0; glide = false; punch_t = 0.0
 	last_hit_t = -9.0; last_shot_t = -9.0; swimming = false; killer = null; placed = 0
@@ -297,9 +314,15 @@ func start_reload() -> void:
 	game.sfx.play3("reload", global_position, -4.0)
 
 func start_heal() -> bool:
-	if meds <= 0 or heal_t > 0.0 or hp >= 100.0:
+	if heal_t > 0.0 or hp >= 100.0 or (meds <= 0 and bandages <= 0):
 		return false
-	heal_t = 2.3
+	if meds > 0 and (hp <= 55.0 or bandages <= 0):
+		heal_kind = "med"
+		heal_t = 2.3
+	else:
+		heal_kind = "bandage"
+		heal_t = 0.9
+	heal_max = heal_t
 	reload_t = 0.0
 	if is_player:
 		game.sfx.play("click")
@@ -368,6 +391,13 @@ func throw_grenade(dir: Vector3) -> void:
 	game.sfx.play3("throw", global_position)
 	game.spawn_grenade(self, eye() + dir * 0.6, dir * 17.0 + Vector3(0, 5, 0))
 
+func throw_smoke(dir: Vector3) -> void:
+	if smokes <= 0 or state != "ground" or heal_t > 0.0:
+		return
+	smokes -= 1
+	game.sfx.play3("throw", global_position)
+	game.spawn_grenade(self, eye() + dir * 0.6, dir * 15.0 + Vector3(0, 5, 0), true)
+
 func dash(dx: float, dz: float) -> void:
 	if dash_cd > 0.0 or state != "ground" or heal_t > 0.0:
 		return
@@ -396,7 +426,7 @@ func tick(dt: float) -> void:
 	if not alive:
 		_death_anim(dt)
 		return
-	fire_cd -= dt; dash_cd -= dt; dome_cd -= dt; punch_t -= dt
+	fire_cd -= dt; dash_cd -= dt; dome_cd -= dt; punch_t -= dt; boost_t -= dt
 	if flash_t > 0.0:
 		flash_t -= dt
 		var k := maxf(flash_t, 0.0) * 5.0
@@ -415,12 +445,16 @@ func tick(dt: float) -> void:
 	if heal_t > 0.0:
 		heal_t -= dt
 		if heal_t <= 0.0:
-			hp = minf(100.0, hp + 50.0)
-			meds -= 1
+			if heal_kind == "med":
+				hp = minf(100.0, hp + 50.0)
+				meds -= 1
+			else:
+				hp = minf(100.0, hp + 15.0)
+				bandages -= 1
 			game.fx.burst("heal", global_position + Vector3(0, 1, 0))
 			if is_player:
 				game.sfx.play("heal")
-				game.hud.toast("+50 здоровья")
+				game.hud.toast("+50 здоровья" if heal_kind == "med" else "+15 здоровья")
 	if state == "sky":
 		return
 	var p := global_position
@@ -453,6 +487,8 @@ func tick(dt: float) -> void:
 		speed = 2.6
 	if swimming:
 		speed = 3.4
+	if boost_t > 0.0:
+		speed *= 1.35
 	var on_floor := is_on_floor() or swimming
 	var accel := 14.0 if on_floor else 3.5
 	if dash_t > 0.0:

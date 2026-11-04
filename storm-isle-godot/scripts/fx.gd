@@ -27,6 +27,7 @@ func setup(f: Font) -> void:
 	_pool("puff", 8, Color(0.85, 0.8, 0.7, 0.5), 0.35, 6, 0.9, 1.4, -0.6, 90.0, true)
 	_pool("pad", 6, Color("#5EF2FF"), 0.06, 20, 0.7, 5.0, 3.0, 25.0, false)
 	_pool("confetti", 4, Color(1, 1, 1), 0.07, 40, 1.4, 7.0, 6.0, 60.0, false)
+	_pool("bigsmoke", 10, Color(0.8, 0.82, 0.86, 0.5), 0.75, 16, 3.6, 1.2, -0.25, 180.0, true)
 	_pool("redsmoke", 4, Color(1, 0.3, 0.35, 0.55), 0.9, 10, 4.0, 3.0, -2.5, 15.0, true)
 	var tm := BoxMesh.new()
 	tm.size = Vector3(0.035, 0.035, 1.0)
@@ -102,11 +103,13 @@ func _pool(n: String, count: int, color: Color, size: float, amount: int, life: 
 	var mesh := SphereMesh.new()
 	mesh.radius = size
 	mesh.height = size * 2.0
-	mesh.radial_segments = 8
-	mesh.rings = 4
+	mesh.radial_segments = 12 if grow else 8
+	mesh.rings = 6 if grow else 4
 	var m := StandardMaterial3D.new()
 	m.vertex_color_use_as_albedo = true
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED if not grow else BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED if grow else BaseMaterial3D.CULL_BACK
+	m.disable_fog = grow
 	if color.a < 1.0:
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mesh.material = m

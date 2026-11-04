@@ -39,9 +39,21 @@ var cross_kick := 0.0
 var cur_fov := 72.0
 var near_weapon = null
 var menu_ang := 0.0
-var quality := 1
-var sens := 1.0
+var cfg := Settings.new()
 var is_touch := false
+var view: SubViewport
+var screen: TextureRect
+var screen_mat: ShaderMaterial
+var listener: AudioListener3D
+var smokes_active: Array = []
+var chests_live: Array = []
+var lobby_pos := Vector3.ZERO
+var lobby_yaw := 0.0
+var loading: CanvasLayer
+var loading_bar: ColorRect
+var loading_label: Label
+var paused := false
+var ready_done := false
 
 # дирижабль
 var ship: Node3D
@@ -64,18 +76,28 @@ var storm_mesh: MeshInstance3D
 var storm_mat: ShaderMaterial
 var next_mesh: MeshInstance3D
 
-var best := {"wins": 0, "place": 0, "kills": 0}
 
 func _ready() -> void:
-	is_touch = DisplayServer.is_touchscreen_available() or OS.has_feature("mobile")
+	process_mode = Node.PROCESS_MODE_PAUSABLE
+	is_touch = DisplayServer.is_touchscreen_available() or OS.has_feature("mobile") or "--touch" in OS.get_cmdline_user_args()
 	autotest = "--autotest" in OS.get_cmdline_user_args()
-	quality = 1 if is_touch else 2
-	_load_settings()
+	cfg.load_cfg(is_touch)
 	font_display = load("res://fonts/RussoOne-Regular.ttf")
 	font_body = load("res://fonts/Rubik-Medium.ttf")
+	_setup_buses()
+	_show_loading()
+	await _step(0.05, "Поднимаем остров из океана…")
 	world = World.new()
 	add_child(world)
-	world.build(self)
+	await _step(0.25, "Выращиваем горы и пляжи…")
+	world.build_env(self)
+	world.build_terrain()
+	await _step(0.4, "Строим города и обставляем дома…")
+	world.build_towns()
+	await _step(0.6, "Сажаем пальмы и ёлки…")
+	world.build_nature()
+	await _step(0.75, "Заряжаем оружие…")
+	_setup_view()
 	sun = DirectionalLight3D.new()
 	sun.light_color = Color("#FFE0B5")
 	sun.light_energy = 1.9
@@ -85,20 +107,16 @@ func _ready() -> void:
 	sun.shadow_bias = 0.05
 	sun.rotation = Vector3(deg_to_rad(-38), deg_to_rad(-125), 0)
 	add_child(sun)
-	cam = Camera3D.new()
-	cam.fov = 72
-	cam.far = 3200
-	add_child(cam)
-	cam.make_current()
 	sfx = Sfx.new()
 	add_child(sfx)
-	sfx.set_enabled(_setting("sound", true))
 	fx = Fx.new()
 	add_child(fx)
 	fx.setup(font_display)
 	_build_storm()
 	_build_ship()
+	await _step(0.88, "Будим соперников…")
 	player = _new_fighter("Ты", true)
+	apply_skin()
 	var nicks: Array = Data.NICKS.duplicate()
 	nicks.shuffle()
 	for i in 19:
@@ -108,7 +126,11 @@ func _ready() -> void:
 	hud.setup(self)
 	_reset_storm()
 	_scatter_loot()
-	apply_quality()
+	_pick_lobby()
+	apply_settings()
+	await _step(1.0, "Готово!")
+	ready_done = true
+	_hide_loading()
 	if "--shots" in OS.get_cmdline_user_args():
 		_shots()
 	if autotest:
@@ -117,7 +139,155 @@ func _ready() -> void:
 		start_match()
 		jump_from(player)
 	else:
-		sfx.music.play()
+		to_menu()
+
+# ------------------------------------------------------------------ экран загрузки
+func _show_loading() -> void:
+	loading = CanvasLayer.new()
+	loading.layer = 50
+	add_child(loading)
+	var bg := ColorRect.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.color = Color("#0B1224")
+	loading.add_child(bg)
+	var c := CenterContainer.new()
+	c.set_anchors_preset(Control.PRESET_FULL_RECT)
+	loading.add_child(c)
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 18)
+	c.add_child(box)
+	var icon := TextureRect.new()
+	icon.texture = load("res://icon.svg")
+	icon.custom_minimum_size = Vector2(150, 150)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	box.add_child(icon)
+	var t := Label.new()
+	t.text = "ОСТРОВ ШТОРМА"
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_font_override("font", font_display)
+	t.add_theme_font_size_override("font_size", 56)
+	t.add_theme_color_override("font_color", Color("#FFB627"))
+	t.add_theme_color_override("font_outline_color", Color("#6B2A00"))
+	t.add_theme_constant_override("outline_size", 10)
+	box.add_child(t)
+	var frame := ColorRect.new()
+	frame.custom_minimum_size = Vector2(420, 14)
+	frame.color = Color(1, 1, 1, 0.12)
+	box.add_child(frame)
+	loading_bar = ColorRect.new()
+	loading_bar.color = Color("#FFB627")
+	loading_bar.size = Vector2(0, 14)
+	frame.add_child(loading_bar)
+	loading_label = Label.new()
+	loading_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	loading_label.add_theme_font_override("font", font_body)
+	loading_label.add_theme_font_size_override("font_size", 18)
+	loading_label.add_theme_color_override("font_color", Color("#A9B6CC"))
+	box.add_child(loading_label)
+
+func _step(k: float, text: String) -> void:
+	loading_bar.size.x = 420.0 * k
+	loading_label.text = text
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+func _hide_loading() -> void:
+	var tw := create_tween()
+	for ch in loading.get_children():
+		if ch is CanvasItem:
+			tw.parallel().tween_property(ch, "modulate:a", 0.0, 0.45)
+	tw.tween_callback(loading.queue_free)
+
+# ------------------------------------------------------------------ пиксельный рендер
+func _setup_view() -> void:
+	view = SubViewport.new()
+	view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	view.msaa_3d = Viewport.MSAA_DISABLED
+	view.audio_listener_enable_3d = false
+	add_child(view)
+	cam = Camera3D.new()
+	cam.fov = 72
+	cam.far = 3200
+	view.add_child(cam)
+	cam.current = true
+	listener = AudioListener3D.new()
+	add_child(listener)
+	listener.make_current()
+	var layer := CanvasLayer.new()
+	layer.layer = -1
+	add_child(layer)
+	screen = TextureRect.new()
+	screen.set_anchors_preset(Control.PRESET_FULL_RECT)
+	screen.texture = view.get_texture()
+	screen.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	screen.stretch_mode = TextureRect.STRETCH_SCALE
+	screen.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	screen_mat = ShaderMaterial.new()
+	screen_mat.shader = load("res://scripts/pixel.gdshader")
+	screen.material = screen_mat
+	layer.add_child(screen)
+	get_viewport().size_changed.connect(_resize_view)
+	_resize_view()
+
+func _resize_view() -> void:
+	if view == null:
+		return
+	var px: int = maxi(1, int(cfg.v.pixel))
+	var ws := DisplayServer.window_get_size()
+	var sz := Vector2i(maxi(64, ws.x / px), maxi(64, ws.y / px))
+	view.size = sz
+	screen_mat.set_shader_parameter("px", Vector2(1.0 / sz.x, 1.0 / sz.y))
+	screen_mat.set_shader_parameter("retro", bool(cfg.v.retro) and px > 1)
+
+func _setup_buses() -> void:
+	for n in ["Music", "SFX"]:
+		if AudioServer.get_bus_index(n) < 0:
+			AudioServer.add_bus()
+			var i := AudioServer.bus_count - 1
+			AudioServer.set_bus_name(i, n)
+			AudioServer.set_bus_send(i, "Master")
+
+func apply_settings() -> void:
+	var v: Dictionary = cfg.v
+	var q: int = v.quality
+	sun.shadow_enabled = q > 0
+	sun.directional_shadow_max_distance = 60.0 if q == 1 else 90.0
+	if world.grass_mm:
+		world.grass_mm.multimesh.visible_instance_count = [0, 3000, -1][q]
+	for l in world.lamps:
+		l.visible = q > 0
+	Engine.max_fps = int(v.fps)
+	_resize_view()
+	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(float(v.vol_master), 0.001)))
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Music"), linear_to_db(maxf(float(v.vol_music), 0.001)))
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("SFX"), linear_to_db(maxf(float(v.vol_sfx), 0.001)))
+	AudioServer.set_bus_mute(0, float(v.vol_master) < 0.01)
+
+func apply_skin() -> void:
+	var o: Array = Data.OUTFITS[int(cfg.v.skin) % Data.OUTFITS.size()]
+	player.set_outfit(o[0], o[1])
+
+func save_settings() -> void:
+	cfg.save_cfg()
+
+func _pick_lobby() -> void:
+	# красивая точка на пляже для лобби
+	for i in 400:
+		var a := randf() * TAU
+		var r := World.ISLAND * randf_range(0.45, 0.85)
+		var x := cos(a) * r
+		var z := sin(a) * r
+		var h := world.height_at(x, z)
+		var sl := absf(world.height_at(x + 3, z) - world.height_at(x - 3, z)) + absf(world.height_at(x, z + 3) - world.height_at(x, z - 3))
+		if h > 1.6 and h < 7.0 and sl < 1.6 and world.town_at(x, z, 1.3) == null and world.is_free(x, z, 4, 4, 9):
+			lobby_pos = Vector3(x, ground_y(x, z, 40.0), z)
+			lobby_yaw = atan2(x, z)   # лицом к морю
+			return
+	lobby_pos = Vector3(0, ground_y(0, 0), 0)
 
 func _new_fighter(n: String, p: bool) -> Fighter:
 	var f := Fighter.new()
@@ -126,35 +296,6 @@ func _new_fighter(n: String, p: bool) -> Fighter:
 	f.reset()
 	fighters.append(f)
 	return f
-
-# ------------------------------------------------------------------ настройки
-var _cfg := ConfigFile.new()
-func _load_settings() -> void:
-	_cfg.load("user://settings.cfg")
-	quality = int(_cfg.get_value("s", "quality", quality))
-	sens = float(_cfg.get_value("s", "sens", 1.0))
-	for k in best.keys():
-		best[k] = int(_cfg.get_value("best", k, 0))
-
-func _setting(k: String, def):
-	return _cfg.get_value("s", k, def)
-
-func save_settings() -> void:
-	_cfg.set_value("s", "quality", quality)
-	_cfg.set_value("s", "sens", sens)
-	_cfg.set_value("s", "sound", sfx.enabled)
-	for k in best.keys():
-		_cfg.set_value("best", k, best[k])
-	_cfg.save("user://settings.cfg")
-
-func apply_quality() -> void:
-	var vp := get_viewport()
-	vp.scaling_3d_scale = [0.6, 0.8, 1.0][quality]
-	vp.msaa_3d = Viewport.MSAA_DISABLED if quality == 0 else Viewport.MSAA_2X
-	sun.shadow_enabled = quality > 0
-	sun.directional_shadow_max_distance = 60.0 if quality == 1 else 90.0
-	if world.grass_mm:
-		world.grass_mm.multimesh.visible_instance_count = [0, 3000, -1][quality]
 
 # ------------------------------------------------------------------ шторм
 func _build_storm() -> void:
@@ -369,6 +510,40 @@ func _loot_visual(it: Dictionary) -> Node3D:
 			sm.radius = 0.2
 			sm.height = 0.4
 			world.mesh_node(sm, world.mat(Color("#4F772D"), 0.6), Vector3.ZERO, g)
+		"smoke":
+			var cm := CylinderMesh.new()
+			cm.top_radius = 0.13
+			cm.bottom_radius = 0.13
+			cm.height = 0.42
+			world.mesh_node(cm, world.mat(Color("#9AA0A6"), 0.5, 0.4), Vector3.ZERO, g)
+			var band := CylinderMesh.new()
+			band.top_radius = 0.135
+			band.bottom_radius = 0.135
+			band.height = 0.1
+			world.mesh_node(band, world.mat(Color("#FFD23F"), 0.5), Vector3(0, 0.08, 0), g)
+		"bandage":
+			var cm := CylinderMesh.new()
+			cm.top_radius = 0.16
+			cm.bottom_radius = 0.16
+			cm.height = 0.18
+			var mi := world.mesh_node(cm, world.mat(Color("#F6EFE4"), 0.9), Vector3.ZERO, g)
+			mi.rotation.x = PI / 2
+			beam_c = Color("#6BE38C")
+		"shield_s":
+			var cm := CylinderMesh.new()
+			cm.top_radius = 0.17
+			cm.bottom_radius = 0.17
+			cm.height = 0.34
+			cm.radial_segments = 6
+			world.mesh_node(cm, world.mat(Color("#7FDBFF"), 0.2, 0.3, 0.8), Vector3.ZERO, g)
+			beam_c = Color("#7FDBFF")
+		"energy":
+			var cm := CylinderMesh.new()
+			cm.top_radius = 0.1
+			cm.bottom_radius = 0.1
+			cm.height = 0.36
+			world.mesh_node(cm, world.mat(Color("#C6FF3D"), 0.3, 0.6, 0.6), Vector3.ZERO, g)
+			beam_c = Color("#C6FF3D")
 	if beam_c.a > 0.0:
 		var bm := CylinderMesh.new()
 		bm.top_radius = 0.1
@@ -390,7 +565,7 @@ func _loot_visual(it: Dictionary) -> Node3D:
 	return g
 
 func spawn_loot(kind: String, pos: Vector3, opts := {}) -> Dictionary:
-	var it := {"kind": kind, "wid": opts.get("wid", ""), "rarity": opts.get("rarity", 0), "amount": opts.get("amount", 1), "ammo": opts.get("ammo", -1), "pos": pos, "alive": true, "phase": randf() * TAU}
+	var it := {"kind": kind, "wid": opts.get("wid", ""), "rarity": opts.get("rarity", 0), "amount": opts.get("amount", 1), "ammo": opts.get("ammo", -1), "pos": pos, "alive": true, "phase": randf() * TAU, "via": opts.get("via", null), "rect": opts.get("rect", null)}
 	var n := _loot_visual(it)
 	n.position = pos + Vector3(0, 0.55, 0)
 	add_child(n)
@@ -398,12 +573,38 @@ func spawn_loot(kind: String, pos: Vector3, opts := {}) -> Dictionary:
 	loot.append(it)
 	return it
 
-func _random_loot(pos: Vector3) -> void:
-	var kind: String = Data.weighted([["weapon", 40], ["ammo", 26], ["med", 14], ["shield", 12], ["grenade", 8]])
+func _random_loot(pos: Vector3, extra := {}, rich := false) -> void:
+	var kind: String = Data.weighted([["weapon", 34], ["ammo", 22], ["med", 8], ["bandage", 10], ["shield", 7], ["shield_s", 8], ["energy", 4], ["grenade", 5], ["smoke", 4]])
+	var o := extra.duplicate()
 	if kind == "weapon":
-		spawn_loot("weapon", pos, {"wid": Data.weighted([["pistol", 20], ["smg", 24], ["shotgun", 20], ["rifle", 24], ["sniper", 12]]), "rarity": Data.weighted([[0, 50], [1, 30], [2, 15], [3, 5]])})
+		o.wid = Data.weighted(Data.WEAPON_WEIGHTS)
+		o.rarity = Data.weighted([[0, 25], [1, 40], [2, 25], [3, 10]] if rich else [[0, 50], [1, 30], [2, 15], [3, 5]])
 	else:
-		spawn_loot(kind, pos, {"amount": randi_range(30, 60) if kind == "ammo" else 1})
+		o.amount = randi_range(30, 60) if kind == "ammo" else 1
+	spawn_loot(kind, pos, o)
+
+func _build_chest(p: Vector3) -> Node3D:
+	var g := Node3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(1.0, 0.55, 0.62)
+	world.mesh_node(bm, world.mat(Color("#8A5A2B"), 0.7), Vector3(0, 0.28, 0), g)
+	var lid := CylinderMesh.new()
+	lid.top_radius = 0.31
+	lid.bottom_radius = 0.31
+	lid.height = 1.0
+	var l := world.mesh_node(lid, world.mat(Color("#A0692F"), 0.7), Vector3(0, 0.55, 0), g)
+	l.rotation.z = PI / 2
+	l.scale = Vector3(1, 1, 0.6)
+	var band := BoxMesh.new()
+	band.size = Vector3(1.04, 0.9, 0.08)
+	for x in [-0.32, 0.32]:
+		world.mesh_node(band, world.mat(Color("#E0B04A"), 0.3, 0.7), Vector3(x, 0.45, 0), g).rotation.y = PI / 2
+	var lock := BoxMesh.new()
+	lock.size = Vector3(0.12, 0.16, 0.06)
+	world.mesh_node(lock, world.mat(Color("#FFD23F"), 0.3, 0.8, 0.6), Vector3(0, 0.45, -0.34), g)
+	add_child(g)
+	g.position = p
+	return g
 
 func ground_y(x: float, z: float, from_y := 60.0) -> float:
 	var h: Dictionary = raycast(Vector3(x, from_y, z), Vector3(x, -5, z), null, L_WORLD)
@@ -415,6 +616,16 @@ func _scatter_loot() -> void:
 	for it in loot:
 		it.node.queue_free()
 	loot.clear()
+	for c in chests_live:
+		c.node.queue_free()
+	chests_live.clear()
+	for sp in world.interior_spots:
+		if randf() < 0.15:
+			continue
+		_random_loot(sp.pos, {"via": sp.via, "rect": sp.rect})
+	for p in world.chests:
+		var cp: Vector3 = p
+		chests_live.append({"pos": cp, "node": _build_chest(cp), "open": false})
 	for s in world.loot_spots:
 		var v: Vector3 = s
 		if randf() < 0.12:
@@ -443,8 +654,12 @@ func item_label(it: Dictionary) -> String:
 	match it.kind:
 		"ammo": return "+%d патронов" % it.amount
 		"med": return "+1 аптечка"
+		"bandage": return "+1 бинт"
 		"shield": return "+50 брони"
+		"shield_s": return "+25 брони"
+		"energy": return "Энергетик: скорость +35%"
 		"grenade": return "+1 граната"
+		"smoke": return "+1 дымовая граната"
 	return Data.WEAPONS[it.wid].name
 
 func give_item(f: Fighter, it: Dictionary, force_replace := false) -> bool:
@@ -461,6 +676,19 @@ func give_item(f: Fighter, it: Dictionary, force_replace := false) -> bool:
 		"grenade":
 			if f.grenades >= 4: return false
 			f.grenades += 1
+		"smoke":
+			if f.smokes >= 3: return false
+			f.smokes += 1
+		"bandage":
+			if f.bandages >= 8: return false
+			f.bandages += 1
+		"shield_s":
+			if f.armor >= 100.0: return false
+			f.armor = minf(100.0, f.armor + 25.0)
+		"energy":
+			f.boost_t = 12.0
+			f.hp = minf(100.0, f.hp + 10.0)
+			fx.burst("pad", f.global_position + Vector3(0, 1, 0), Color("#C6FF3D"))
 		"weapon":
 			var mag: int = Data.WEAPONS[it.wid].mag
 			var w := {"id": it.wid, "rarity": it.rarity, "ammo": it.ammo if it.ammo >= 0 else mag}
@@ -490,7 +718,10 @@ func raycast(from: Vector3, to: Vector3, ignore: Fighter, mask := L_WORLD | L_CH
 	return get_world_3d().direct_space_state.intersect_ray(q)
 
 func can_see(a: Fighter, b: Fighter) -> bool:
-	var h := raycast(a.eye(), b.global_position + Vector3(0, 1.2, 0), null, L_WORLD | L_DOME)
+	var to := b.global_position + Vector3(0, 1.2, 0)
+	if smoke_blocks(a.eye(), to):
+		return false
+	var h := raycast(a.eye(), to, null, L_WORLD | L_DOME)
 	return h.is_empty()
 
 func impact(p: Vector3, n: Vector3, col: Object) -> void:
@@ -565,6 +796,10 @@ func _kill(f: Fighter, attacker, wname: String, head: bool) -> void:
 		spawn_loot("med", p + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)))
 	if f.grenades > 0:
 		spawn_loot("grenade", p + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)))
+	if f.bandages > 0:
+		spawn_loot("bandage", p + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)))
+	if f.smokes > 0:
+		spawn_loot("smoke", p + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)))
 	fx.burst("confetti", p + Vector3(0, 1, 0), Color(1, 0.9, 0.5))
 	if attacker != null and attacker != f:
 		attacker.kills += 1
@@ -606,7 +841,7 @@ func on_player_recoil(r: float, wid: String) -> void:
 		shake = maxf(shake, 0.25)
 
 # гранаты и купола
-func spawn_grenade(owner: Fighter, pos: Vector3, vel: Vector3) -> void:
+func spawn_grenade(owner: Fighter, pos: Vector3, vel: Vector3, is_smoke := false) -> void:
 	var rb := RigidBody3D.new()
 	rb.collision_layer = 0
 	rb.collision_mask = L_WORLD
@@ -623,12 +858,12 @@ func spawn_grenade(owner: Fighter, pos: Vector3, vel: Vector3) -> void:
 	var sm := SphereMesh.new()
 	sm.radius = 0.16
 	sm.height = 0.32
-	world.mesh_node(sm, world.mat(Color("#4F772D"), 0.5), Vector3.ZERO, rb)
+	world.mesh_node(sm, world.mat(Color("#9AA0A6") if is_smoke else Color("#4F772D"), 0.5), Vector3.ZERO, rb)
 	add_child(rb)
 	rb.global_position = pos
 	rb.linear_velocity = vel
 	rb.angular_velocity = Vector3(randf(), randf(), randf()) * 8.0
-	grenades.append({"rb": rb, "t": 2.2, "owner": owner})
+	grenades.append({"rb": rb, "t": 1.6 if is_smoke else 2.2, "owner": owner, "smoke": is_smoke})
 
 func spawn_dome(owner: Fighter) -> void:
 	var body := StaticBody3D.new()
@@ -666,6 +901,50 @@ func spawn_dome(owner: Fighter) -> void:
 	mi.scale = Vector3.ONE * 0.1
 	domes.append({"body": body, "mi": mi, "m": m, "t": 7.0, "grow": 0.0})
 
+func _update_smoke_chests(dt: float) -> void:
+	for i in range(smokes_active.size() - 1, -1, -1):
+		var sm: Dictionary = smokes_active[i]
+		sm.t -= dt
+		sm.puff -= dt
+		if sm.puff <= 0.0 and sm.t > 1.0:
+			sm.puff = 0.45
+			fx.burst("bigsmoke", sm.pos + Vector3(randf_range(-1.5, 1.5), randf_range(-0.6, 0.6), randf_range(-1.5, 1.5)))
+		if sm.t <= 0.0:
+			smokes_active.remove_at(i)
+	for c in chests_live:
+		if c.open:
+			continue
+		for f in fighters:
+			if f.alive and f.state == "ground" and f.global_position.distance_squared_to(c.pos) < 2.6:
+				_open_chest(c, f)
+				break
+
+func _open_chest(c: Dictionary, f: Fighter) -> void:
+	c.open = true
+	var lid: Node3D = c.node.get_child(1)
+	var tw := create_tween()
+	tw.tween_property(lid, "rotation:x", -1.2, 0.35)
+	tw.tween_interval(6.0)
+	tw.tween_property(c.node, "scale", Vector3(1, 0.01, 1), 0.4)
+	fx.burst("confetti", c.pos + Vector3(0, 0.8, 0), Color(1, 0.85, 0.3))
+	sfx.play3("pickup", c.pos, 0.0)
+	for k in 3:
+		var a := randf() * TAU
+		_random_loot(c.pos + Vector3(cos(a) * 0.9, 0.02, sin(a) * 0.9), {}, true)
+	if f.is_player:
+		hud.toast("Сундук открыт!")
+
+func smoke_blocks(a: Vector3, b: Vector3) -> bool:
+	for sm in smokes_active:
+		if sm.t < 0.8:
+			continue
+		var c: Vector3 = sm.pos
+		var ab := b - a
+		var t := clampf((c - a).dot(ab) / maxf(ab.length_squared(), 0.001), 0.0, 1.0)
+		if (a + ab * t).distance_to(c) < 3.6:
+			return true
+	return false
+
 func _update_domes_grenades(dt: float) -> void:
 	for i in range(domes.size() - 1, -1, -1):
 		var d: Dictionary = domes[i]
@@ -687,6 +966,10 @@ func _update_domes_grenades(dt: float) -> void:
 			var p: Vector3 = g.rb.global_position
 			g.rb.queue_free()
 			grenades.remove_at(i)
+			if g.smoke:
+				smokes_active.append({"pos": p + Vector3(0, 1.2, 0), "t": 13.0, "puff": 0.0})
+				sfx.play3("dash", p, -2.0)
+				continue
 			fx.explosion(p, 3.2)
 			sfx.play3("boom", p, 4.0)
 			var cd := p.distance_to(cam.global_position)
@@ -757,7 +1040,7 @@ func _update_drops(dt: float) -> void:
 
 # ------------------------------------------------------------------ ИИ ботов
 func _needs_loot(b: Fighter) -> bool:
-	return b.slots[0] == null or b.slots[1] == null or b.reserve < 45 or b.meds < 2 or b.armor < 50.0
+	return b.slots[0] == null or b.slots[1] == null or b.reserve < 45 or b.meds + b.bandages < 3 or b.armor < 50.0
 
 func _wants(b: Fighter, it: Dictionary) -> bool:
 	match it.kind:
@@ -771,8 +1054,11 @@ func _wants(b: Fighter, it: Dictionary) -> bool:
 			return float(Data.WEAPONS[it.wid].score) * float(Data.RAR[it.rarity].mul) > worst + 0.3
 		"ammo": return b.reserve < 250
 		"med": return b.meds < 5
-		"shield": return b.armor < 100.0
+		"shield", "shield_s": return b.armor < 100.0
 		"grenade": return b.grenades < 3
+		"bandage": return b.bandages < 6
+		"smoke": return b.smokes < 2
+		"energy": return true
 	return false
 
 func _bot_pickup(b: Fighter, it: Dictionary) -> void:
@@ -833,7 +1119,7 @@ func _ai_think(b: Fighter) -> void:
 	var zone_danger: bool = outside_storm(bp) or (storm.phase < PHASES.size() and Vector2(bp.x, bp.z).distance_squared_to(storm.to_c) > pow(storm.to_r * 0.95, 2) and storm_time_left() < 25.0)
 	var w = b.weapon()
 	var armed: bool = w != null and (w.ammo > 0 or b.reserve > 0)
-	if b.hp < 45.0 and b.meds > 0 and not (ai.los and bd < 35.0):
+	if b.hp < 45.0 and b.meds + b.bandages > 0 and not (ai.los and bd < 35.0):
 		ai.state = "heal"
 	elif ai.target != null and (bd < 9.0 if not armed else (bd < 45.0 or ai.state == "fight" or not _needs_loot(b))):
 		ai.state = "fight"
@@ -852,6 +1138,9 @@ func _ai_think(b: Fighter) -> void:
 			if d2 < bdist and _wants(b, it):
 				bdist = d2
 				bi = it
+		for c in chests_live:
+			if not c.open and c.pos.distance_squared_to(bp) < 30.0 * 30.0 and bi == null:
+				bi = {"pos": c.pos, "rect": null, "via": null}
 		for d in drops:
 			if d.landed and Vector2(d.x - bp.x, d.z - bp.z).length_squared() < 80.0 * 80.0:
 				ai.state = "loot"
@@ -860,6 +1149,9 @@ func _ai_think(b: Fighter) -> void:
 		if bi != null:
 			ai.state = "loot"
 			ai.move = bi.pos
+			# лут в доме: сначала к двери, потом внутрь
+			if bi.rect != null and not (bi.rect as Rect2).has_point(Vector2(bp.x, bp.z)) and Vector2(bp.x - bi.via.x, bp.z - bi.via.z).length() > 1.6:
+				ai.move = bi.via
 		else:
 			ai.state = "roam"
 			if ai.roam_t < time or Vector2(bp.x - ai.move.x, bp.z - ai.move.z).length() < 4.0:
@@ -974,13 +1266,15 @@ func _ai_act(b: Fighter, dt: float) -> void:
 				b.dash(right.x * ai.strafe, right.y * ai.strafe)
 			if b.hp < 35.0 and b.dome_cd <= 0.0 and randf() < 0.02:
 				b.dome()
+			if b.hp < 40.0 and b.smokes > 0 and randf() < 0.01:
+				b.throw_smoke(Vector3(dv.x, d * 0.3, dv.y).normalized())
 			ai.nade_t -= dt
 			if b.grenades > 0 and d > 7.0 and d < 24.0 and ai.nade_t <= 0.0:
 				ai.nade_t = randf_range(5, 10)
 				if randf() < 0.4:
 					b.throw_grenade(Vector3(dv.x, d * 0.35, dv.y).normalized())
 			var rng: float = float(Data.WEAPONS[w.id].range) * 0.92 if w != null else 2.2
-			if ai.react <= 0.0 and absf(angle_difference(b.yaw, want)) < 0.3 and d < rng:
+			if ai.react <= 0.0 and absf(angle_difference(b.yaw, want)) < 0.3 and d < rng and not smoke_blocks(b.eye(), t.global_position + Vector3(0, 1.2, 0)):
 				var tv: Vector3 = t.velocity
 				var err: float = 0.02 + (1.0 - ai.skill) * 0.075 + d * 0.0008 + (0.03 if t.is_player else 0.0) + Vector2(tv.x, tv.z).length() * 0.005
 				var head_aim := 0.45 if randf() < ai.skill * 0.18 else 0.0
@@ -1002,12 +1296,17 @@ func _update_player(dt: float) -> void:
 	var w = pl.weapon()
 	var ads: bool = (ads_toggle or ads_held) and w != null and pl.state == "ground"
 	var zoom: float = float(Data.WEAPONS[w.id].zoom) if ads else 1.0
-	var k: float = (0.0058 if is_touch else 0.0032) * sens / sqrt(zoom)
+	var k: float = (0.0058 if is_touch else 0.0032) * float(cfg.v.sens) * (float(cfg.v.ads_sens) if ads else 1.0) / sqrt(zoom)
 	cam_yaw -= look_delta.x * k
-	cam_pitch = clampf(cam_pitch - look_delta.y * k, -1.15, 1.05)
+	cam_pitch = clampf(cam_pitch - look_delta.y * k * (-1.0 if cfg.v.invert_y else 1.0), -1.15, 1.05)
 	look_delta = Vector2.ZERO
-	if is_touch and w != null and pl.state == "ground":
+	if is_touch and bool(cfg.v.aim_assist) and w != null and pl.state == "ground":
 		_aim_assist(dt)
+	var auto_fire := false
+	if is_touch and bool(cfg.v.autofire) and w != null and pl.state == "ground" and pl.alive:
+		var af := _cam_fwd()
+		var ah := raycast(cam.global_position, cam.global_position + af * float(Data.WEAPONS[w.id].range), pl)
+		auto_fire = ah and ah.collider is Fighter and ah.collider.alive
 	var ix := joy.x
 	var iy := joy.y
 	if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP): iy -= 1.0
@@ -1024,7 +1323,7 @@ func _update_player(dt: float) -> void:
 	pl.in_ads = ads
 	pl.yaw = cam_yaw
 	pl.aim_pitch = cam_pitch
-	if fire_held and pl.state == "ground" and pl.alive:
+	if (fire_held or auto_fire) and pl.state == "ground" and pl.alive:
 		if pl.heal_t > 0.0:
 			pl.heal_t = 0.0
 		var fwd := _cam_fwd()
@@ -1135,10 +1434,22 @@ func _update_camera(dt: float) -> void:
 	cam.fov = cur_fov
 
 func _update_menu_camera(dt: float) -> void:
-	menu_ang += dt * 0.05
-	cam.global_position = Vector3(cos(menu_ang) * 210, 85, sin(menu_ang) * 210)
-	cam.look_at(Vector3(0, 8, 0))
-	cam.fov = 60
+	# лобби: герой стоит на пляже, камера медленно облетает его
+	menu_ang += dt * 0.12
+	var p := lobby_pos
+	player.global_position = p
+	player.state = "ground"
+	player.aim_pitch = 0.0
+	player.velocity = Vector3.ZERO
+	player.visible = true
+	player._animate(dt)
+	player.model.visible = true
+	var ang := lobby_yaw + 0.55 + sin(menu_ang) * 0.35
+	player.yaw = ang - 0.35 + sin(time * 0.5) * 0.12
+	var off := Vector3(-sin(ang), 0, -cos(ang)) * 4.6
+	cam.global_position = p + off + Vector3(0, 1.9, 0)
+	cam.look_at(p + Vector3(0, 1.15, 0) + Vector3(-sin(ang + PI / 2), 0, -cos(ang + PI / 2)) * -1.6)
+	cam.fov = 50
 
 # ------------------------------------------------------------------ ход матча
 func start_match() -> void:
@@ -1217,23 +1528,38 @@ func _show_end() -> void:
 	var win := player.alive
 	var place := 1 if win else player.placed
 	if win:
-		best.wins += 1
-	if best.place == 0 or place < best.place:
-		best.place = place
-	best.kills = maxi(best.kills, player.kills)
+		cfg.best.wins += 1
+	if cfg.best.place == 0 or place < cfg.best.place:
+		cfg.best.place = place
+	cfg.best.kills = maxi(cfg.best.kills, player.kills)
+	cfg.best.matches += 1
 	save_settings()
 	hud.show_end(win, place)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 func to_menu() -> void:
 	mode = "menu"
+	set_paused(false)
 	for f in fighters:
 		f.visible = false
+	player.reset()
+	player.collision_layer = 0
+	if player.slots[0] == null:
+		player.slots[0] = {"id": "rifle", "rarity": 3, "ammo": 30}
+		player.refresh_gun()
 	ship.visible = false
 	hud.show_mode("menu")
-	sfx.music.play()
+	if not sfx.music.playing:
+		sfx.music.play()
+
+func set_paused(on: bool) -> void:
+	paused = on
+	get_tree().paused = on
+	hud.show_pause(on)
 
 func _physics_process(dt: float) -> void:
+	if not ready_done:
+		return
 	time += dt
 	if mode == "menu":
 		_update_menu_camera(dt)
@@ -1259,6 +1585,7 @@ func _physics_process(dt: float) -> void:
 			if f.state == "sky":
 				f.global_position = ship_pos(ship_t)
 		_update_domes_grenades(dt)
+		_update_smoke_chests(dt)
 		_update_drops(dt)
 		_update_camera(dt)
 		if end_timer > 0.0:
@@ -1271,6 +1598,7 @@ func _physics_process(dt: float) -> void:
 		sfx.set_loop(sfx.storm, 0.5 if out else 0.0)
 		var wv := 0.55 if player.state == "fall" else (0.25 if player.state == "chute" else (0.12 if player.state == "sky" else 0.0))
 		sfx.set_loop(sfx.wind, wv)
+	listener.global_transform = cam.global_transform
 	var wn: MeshInstance3D = world.water_node
 	wn.position = Vector3(snappedf(cam.global_position.x, 35.3), 0, snappedf(cam.global_position.z, 35.3))
 	_update_storm_visual()
@@ -1322,36 +1650,50 @@ func _snap(n: String) -> void:
 	print("SHOT ", n, " -> ", ProjectSettings.globalize_path("user://shot_%s.png" % n))
 
 func _shots() -> void:
-	is_touch = "--touch" in OS.get_cmdline_user_args()
-	hud._mark()
 	await get_tree().create_timer(2.0).timeout
 	await _snap("menu")
+	hud.open_settings("menu")
+	settings_tab_shot(1)
+	await get_tree().create_timer(0.5).timeout
+	await _snap("settings")
+	hud.close_settings()
 	start_match()
 	await get_tree().create_timer(3.0).timeout
 	await _snap("ship")
 	jump_from(player)
-	await get_tree().create_timer(2.5).timeout
-	await _snap("fall")
 	Engine.time_scale = 6.0
 	await get_tree().create_timer(7.0).timeout
 	Engine.time_scale = 1.0
-	# дать игроку оружие и поставить рядом бота для кадра «бой»
-	give_item(player, spawn_loot("weapon", player.global_position, {"wid": "rifle", "rarity": 2}))
-	player.armor = 50.0
+	# заходим в дом
+	var sp: Dictionary = world.interior_spots[0]
+	var r: Rect2 = sp.rect
+	player.global_position = Vector3(r.get_center().x, sp.pos.y + 0.2, r.get_center().y)
+	player.state = "ground"
+	player.chute.visible = false
+	give_item(player, spawn_loot("weapon", player.global_position, {"wid": "lmg", "rarity": 2}))
+	cam_yaw = atan2(-(sp.via.x - player.global_position.x), -(sp.via.z - player.global_position.z)) + PI
+	cam_pitch = -0.15
+	await get_tree().create_timer(1.2).timeout
+	await _snap("interior")
+	cam_yaw += PI
+	await get_tree().create_timer(0.4).timeout
+	await _snap("interior2")
+	player.global_position = sp.via + Vector3(0, 0.3, 0)
 	var b: Fighter = fighters[1]
 	if b.state == "sky":
 		jump_from(b)
 	b.global_position = player.global_position + Vector3(-sin(cam_yaw), 0, -cos(cam_yaw)) * 7.0 + Vector3(0, 1, 0)
 	b.state = "ground"
-	b.ai.state = "roam"
-	cam_pitch = -0.12
 	await get_tree().create_timer(1.0).timeout
-	await _snap("ground")
 	fire_held = true
 	await get_tree().create_timer(0.35).timeout
 	await _snap("fight")
 	fire_held = false
-	spawn_dome(player)
-	await get_tree().create_timer(0.8).timeout
-	await _snap("dome")
+	smokes_active.append({"pos": player.global_position + Vector3(-sin(cam_yaw), 1.0, -cos(cam_yaw)) * 5.0, "t": 10.0, "puff": 0.0})
+	await get_tree().create_timer(1.5).timeout
+	await _snap("smoke")
 	get_tree().quit()
+
+func settings_tab_shot(i: int) -> void:
+	hud.settings_tab = i
+	hud._fill_settings()

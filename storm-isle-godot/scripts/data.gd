@@ -7,6 +7,8 @@ static var WEAPONS := {
 	"smg": {"name": "ПП «Оса»", "short": "ПП", "dmg": 12.0, "rate": 0.072, "mag": 30, "spread": 0.042, "range": 55.0, "pellets": 1, "reload": 1.6, "zoom": 1.3, "recoil": 0.007, "len": 0.42, "pref": 11.0, "score": 2.2, "sound": "smg"},
 	"shotgun": {"name": "Дробовик «Гром»", "short": "Дробовик", "dmg": 10.0, "rate": 0.8, "mag": 6, "spread": 0.1, "range": 26.0, "pellets": 9, "reload": 2.1, "zoom": 1.2, "recoil": 0.05, "len": 0.62, "pref": 6.0, "score": 2.1, "sound": "shotgun"},
 	"rifle": {"name": "Автомат «Шторм»", "short": "Автомат", "dmg": 20.0, "rate": 0.112, "mag": 30, "spread": 0.02, "range": 120.0, "pellets": 1, "reload": 1.9, "zoom": 1.7, "recoil": 0.01, "len": 0.64, "pref": 24.0, "score": 3.0, "sound": "rifle"},
+	"revolver": {"name": "Револьвер «Кобра»", "short": "Револьвер", "dmg": 44.0, "rate": 0.55, "mag": 6, "spread": 0.01, "range": 90.0, "pellets": 1, "reload": 2.0, "zoom": 1.4, "recoil": 0.045, "len": 0.3, "pref": 18.0, "score": 1.8, "sound": "pistol"},
+	"lmg": {"name": "Пулемёт «Медведь»", "short": "Пулемёт", "dmg": 17.0, "rate": 0.09, "mag": 60, "spread": 0.034, "range": 100.0, "pellets": 1, "reload": 3.2, "zoom": 1.5, "recoil": 0.008, "len": 0.78, "pref": 22.0, "score": 2.7, "sound": "rifle"},
 	"sniper": {"name": "Снайперка «Игла»", "short": "Снайперка", "dmg": 90.0, "rate": 1.25, "mag": 5, "spread": 0.0012, "range": 320.0, "pellets": 1, "reload": 2.5, "zoom": 4.2, "recoil": 0.07, "len": 0.82, "pref": 55.0, "score": 2.6, "sound": "sniper"},
 }
 
@@ -16,6 +18,12 @@ static var RAR := [
 	{"name": "эпическое", "color": Color("#B062FF"), "mul": 1.2},
 	{"name": "легендарное", "color": Color("#FFB627"), "mul": 1.35},
 ]
+
+static var ITEMS := {
+	"ammo": "Патроны", "med": "Аптечка", "bandage": "Бинт", "shield": "Броня", "shield_s": "Лёгкая броня",
+	"energy": "Энергетик", "grenade": "Граната", "smoke": "Дымовая граната",
+}
+static var WEAPON_WEIGHTS := [["pistol", 16], ["revolver", 9], ["smg", 20], ["shotgun", 17], ["rifle", 20], ["lmg", 8], ["sniper", 10]]
 
 static var NICKS := ["ГрозаКустов", "Тапок", "NeoKiller", "Бабуля_Pro", "ШашлыкМастер", "Кибер_Ёж", "Пельмень", "ZloyKot", "Молния", "ТихийДед", "Snaiper2009", "Ракета", "Пиксель", "Ватрушка", "Кактус", "ДжонЧай", "Буря", "Самурай", "Гоша_007", "Фантом", "Йети", "Барсук", "Лимонад"]
 

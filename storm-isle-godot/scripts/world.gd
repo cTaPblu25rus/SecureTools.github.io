@@ -175,13 +175,19 @@ func is_free(x: float, z: float, w: float, d: float, m: float) -> bool:
 	return true
 
 # ------------------------------------------------------------------ постройка мира
-func build(env_parent: Node3D) -> void:
+func build_env(env_parent: Node3D) -> void:
 	_build_environment(env_parent)
+
+func build_terrain() -> void:
 	_build_terrain()
 	_build_water()
+
+func build_towns() -> void:
 	for t in towns:
 		_build_town(t)
 	_build_wild()
+
+func build_nature() -> void:
 	_build_nature()
 	_build_pads()
 	_build_clouds()
@@ -330,44 +336,180 @@ func _build_water() -> void:
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 # ------------------------------------------------------------------ постройки
+const FLOORS := ["#A0785A", "#8C6A50", "#B89B7A", "#7A8C99", "#9E8C7A", "#C2A27C"]
+const FURN := ["#6B4F3A", "#8A5A44", "#4F6D7A", "#9C6644", "#5E548E", "#7F5539"]
+const FABRIC := ["#E07A5F", "#3D5A80", "#81B29A", "#F2CC8F", "#B56576", "#6D597A"]
+var interior_spots: Array = []   # {"pos", "via", "rect"} — лут внутри домов
+var chests: Array = []           # Vector3 — сундуки с несколькими предметами
+var lamps: Array = []
+
+func _solid(pos: Vector3, size: Vector3, c: Color, rough := 0.85) -> void:
+	var bm := BoxMesh.new()
+	bm.size = size
+	mesh_node(bm, mat(c, rough), pos)
+	static_box(pos, size)
+
+func _deco(pos: Vector3, size: Vector3, c: Color, rough := 0.8, emis := 0.0) -> MeshInstance3D:
+	var bm := BoxMesh.new()
+	bm.size = size
+	return mesh_node(bm, mat(c, rough, 0.0, emis), pos, null, emis == 0.0)
+
+func _wall_piece(along_x: bool, s0: float, s1: float, c: float, y: float, h: float, t: float, col: Color) -> void:
+	var ln := s1 - s0
+	if ln < 0.02 or h < 0.02:
+		return
+	var mid := (s0 + s1) / 2.0
+	if along_x:
+		_solid(Vector3(mid, y + h / 2.0, c), Vector3(ln, h, t), col)
+	else:
+		_solid(Vector3(c, y + h / 2.0, mid), Vector3(t, h, ln), col)
+
+## Стена с проёмами: openings = [[центр, ширина, низ, верх], ...]
+func _wall(along_x: bool, a0: float, a1: float, c: float, y: float, h: float, t: float, col: Color, openings: Array) -> void:
+	openings.sort_custom(func(p, q): return p[0] < q[0])
+	var cur := a0
+	for o in openings:
+		var o0: float = o[0] - o[1] / 2.0
+		var o1: float = o[0] + o[1] / 2.0
+		_wall_piece(along_x, cur, o0, c, y, h, t, col)
+		_wall_piece(along_x, o0, o1, c, y, o[2], t, col)
+		_wall_piece(along_x, o0, o1, c, y + o[3], h - o[3], t, col)
+		if o[2] > 0.5:
+			# подоконник и рама
+			var sill := Vector3(o[0], y + o[2], c) if along_x else Vector3(c, y + o[2], o[0])
+			_deco(sill, Vector3(o[1] + 0.2, 0.08, t + 0.12) if along_x else Vector3(t + 0.12, 0.08, o[1] + 0.2), Color("#F4F1EA"))
+		cur = o1
+	_wall_piece(along_x, cur, a1, c, y, h, t, col)
+
 func house(x: float, z: float, y: float, w: float, d: float, h: float, rot: bool) -> void:
 	if rot:
-		var t := w
+		var tt := w
 		w = d
-		d = t
+		d = tt
 	var wall := Color(WALLS.pick_random())
 	var roof := Color(ROOFS.pick_random())
-	box(Vector3(x, y + h / 2.0, z), Vector3(w, h, d), wall)
-	box(Vector3(x, y - 0.05, z), Vector3(w + 0.4, 0.5, d + 0.4), Color("#8C8279"), false)
-	# двускатная крыша (призма), конёк вдоль длинной стороны
+	var t := 0.28
+	footprints.append(Rect2(x - w / 2.0, z - d / 2.0, w, d))
+	_solid(Vector3(x, y - 0.2, z), Vector3(w + 0.4, 0.6, d + 0.4), Color("#8C8279"))
+	var fy := y + 0.1
+	_deco(Vector3(x, fy + 0.012, z), Vector3(w - t * 2.0, 0.02, d - t * 2.0), Color(FLOORS.pick_random()), 0.6)
+	var door_side := randi() % 4
+	var dirs := [Vector2(0, -1), Vector2(0, 1), Vector2(-1, 0), Vector2(1, 0)]
+	for side in 4:
+		var along_x := side < 2
+		var length := w if along_x else d - t * 2.0
+		var base := x if along_x else z
+		var c: float
+		if along_x:
+			c = z - d / 2.0 + t / 2.0 if side == 0 else z + d / 2.0 - t / 2.0
+		else:
+			c = x - w / 2.0 + t / 2.0 if side == 2 else x + w / 2.0 - t / 2.0
+		var ops := []
+		if side == door_side:
+			ops.append([base, 1.7, 0.0, 2.45])
+			if length > 7.0:
+				ops.append([base - length * 0.32, 1.2, 1.05, 2.15])
+				ops.append([base + length * 0.32, 1.2, 1.05, 2.15])
+		else:
+			var n := 2 if length > 6.5 else 1
+			for k in n:
+				ops.append([base + (k - (n - 1) / 2.0) * length * 0.42, 1.3, 1.05, 2.2])
+		_wall(along_x, base - length / 2.0, base + length / 2.0, c, fy, h, t, wall, ops)
+	# потолок и крыша
+	_solid(Vector3(x, fy + h + 0.1, z), Vector3(w + 0.3, 0.2, d + 0.3), wall.darkened(0.2))
 	var pm := PrismMesh.new()
-	var rh := minf(w, d) * 0.45
+	var rh := minf(w, d) * 0.42
 	var long_x := w >= d
-	pm.size = Vector3((d if long_x else w) + 0.8, rh, (w if long_x else d) + 0.8)
-	var r := mesh_node(pm, mat(roof, 0.7), Vector3(x, y + h + rh / 2.0, z))
+	pm.size = Vector3((d if long_x else w) + 0.9, rh, (w if long_x else d) + 0.9)
+	var r := mesh_node(pm, mat(roof, 0.7), Vector3(x, fy + h + 0.2 + rh / 2.0, z))
 	if long_x:
 		r.rotation.y = PI / 2.0
-	# окна, дверь, лут у стен
-	var win := Color("#9FD8FF")
-	var faces := [Vector2(0, -1), Vector2(0, 1), Vector2(-1, 0), Vector2(1, 0)]
-	for fi in 4:
-		var f: Vector2 = faces[fi]
-		var along := w if f.x == 0 else d
-		var px := x + f.x * (w / 2.0 + 0.04)
-		var pz := z + f.y * (d / 2.0 + 0.04)
-		var door := fi == (2 if rot else 0)
-		var sx := 1.0 if f.x == 0 else 0.08
-		var sz := 1.0 if f.x != 0 else 0.08
-		if door:
-			box(Vector3(px, y + 1.15, pz), Vector3(sx * 1.3 + (1.0 - sx) * 0.08, 2.3, sz * 1.3 + (1.0 - sz) * 0.08), Color("#5A4636"), false)
-		for o in [-along / 3.0, along / 3.0]:
-			if door and absf(o) < 1.0:
-				continue
-			var wx: float = px + (o if f.x == 0 else 0.0)
-			var wz: float = pz + (o if f.y == 0 else 0.0)
-			box(Vector3(wx, y + 2.0, wz), Vector3(sx * 1.2 + (1.0 - sx) * 0.08, 1.0, sz * 1.2 + (1.0 - sz) * 0.08), win, false, 0.35, 0.15)
-		loot_spots.append(Vector3(px + f.x * 1.3 + (randf_range(-along / 3.0, along / 3.0) if f.x == 0 else 0.0), -999, pz + f.y * 1.3 + (randf_range(-along / 3.0, along / 3.0) if f.y == 0 else 0.0)))
-	cyl(Vector3(x + w * 0.25, y + h + rh * 0.6, z + d * 0.2), 0.35, 1.6, Color("#7D6E63"), false, 12)
+	var dn: Vector2 = dirs[door_side]
+	var via := Vector3(x + dn.x * (w / 2.0 + 1.5), fy, z + dn.y * (d / 2.0 + 1.5))
+	# козырёк и ступенька у двери
+	_deco(Vector3(x + dn.x * (w / 2.0 + 0.45), fy + 2.6, z + dn.y * (d / 2.0 + 0.45)), Vector3(2.2 if dn.x == 0 else 0.9, 0.1, 0.9 if dn.x == 0 else 2.2), roof.darkened(0.2))
+	var inner := Rect2(x - w / 2.0 + t, z - d / 2.0 + t, w - t * 2.0, d - t * 2.0)
+	# перегородка с дверным проёмом в больших домах
+	if w >= 9.5 and door_side >= 2:
+		_wall(false, z - d / 2.0 + t, z + d / 2.0 - t, x, fy, h, 0.2, wall.darkened(0.08), [[z, 1.5, 0.0, 2.4]])
+	elif w >= 9.5:
+		_wall(false, z - d / 2.0 + t, z + d / 2.0 - t, x, fy, h, 0.2, wall.darkened(0.08), [[z + (d * 0.25 if door_side == 0 else -d * 0.25), 1.5, 0.0, 2.4]])
+	_furnish(inner, fy, door_side, h)
+	for k in randi_range(2, 3):
+		var p := Vector3(randf_range(inner.position.x + 0.9, inner.end.x - 0.9), fy + 0.02, randf_range(inner.position.y + 0.9, inner.end.y - 0.9))
+		interior_spots.append({"pos": p, "via": via, "rect": inner.grow(0.2)})
+	loot_spots.append(Vector3(via.x, -999, via.z))
+	# лампа
+	cyl(Vector3(x, fy + h - 0.15, z), 0.22, 0.12, Color("#FFE8B0"), false, 12, 0.3, 0.0, 3.0)
+	var l := OmniLight3D.new()
+	l.position = Vector3(x, fy + h - 0.5, z)
+	l.light_color = Color("#FFD6A0")
+	l.light_energy = 1.1
+	l.omni_range = maxf(w, d) * 0.8
+	add_child(l)
+	lamps.append(l)
+
+## Мебель по углам и в центре комнаты
+func _furnish(r: Rect2, y: float, door_side: int, h: float) -> void:
+	var wood := Color(FURN.pick_random())
+	var fab := Color(FABRIC.pick_random())
+	var corners := [Vector2(r.position.x + 1.1, r.position.y + 0.8), Vector2(r.end.x - 1.1, r.position.y + 0.8), Vector2(r.position.x + 1.1, r.end.y - 0.8), Vector2(r.end.x - 1.1, r.end.y - 0.8)]
+	# не ставим мебель у двери
+	var blocked: Array = [[0, 1], [2, 3], [0, 2], [1, 3]][door_side]
+	var kinds := ["bed", "shelf", "sofa", "chest", "kitchen", "plant"]
+	kinds.shuffle()
+	var ki := 0
+	for i in 4:
+		if i in blocked and randf() < 0.75:
+			continue
+		var c: Vector2 = corners[i]
+		var k: String = kinds[ki % kinds.size()]
+		ki += 1
+		match k:
+			"bed":
+				_solid(Vector3(c.x, y + 0.25, c.y), Vector3(1.9, 0.5, 1.1), wood)
+				_deco(Vector3(c.x, y + 0.56, c.y), Vector3(1.8, 0.14, 1.0), Color("#F4F1EA"), 0.9)
+				_deco(Vector3(c.x + 0.6, y + 0.68, c.y), Vector3(0.4, 0.12, 0.8), Color("#FFFFFF"), 0.9)
+				_deco(Vector3(c.x - 0.25, y + 0.64, c.y), Vector3(1.0, 0.04, 1.02), fab, 0.9)
+			"shelf":
+				_solid(Vector3(c.x, y + 0.95, c.y), Vector3(1.4, 1.9, 0.45), wood)
+				for sh in 3:
+					for b in 5:
+						if randf() < 0.75:
+							_deco(Vector3(c.x - 0.55 + b * 0.27, y + 0.45 + sh * 0.55, c.y - 0.12), Vector3(0.16, 0.36, 0.3), Color(FABRIC.pick_random()), 0.8)
+			"sofa":
+				var cm := CapsuleMesh.new()
+				cm.radius = 0.28
+				cm.height = 1.9
+				var s1 := mesh_node(cm, mat(fab, 0.95), Vector3(c.x, y + 0.32, c.y))
+				s1.rotation.z = PI / 2.0
+				var s2 := mesh_node(cm, mat(fab.darkened(0.15), 0.95), Vector3(c.x, y + 0.72, c.y + (0.32 if c.y > r.get_center().y else -0.32)))
+				s2.rotation.z = PI / 2.0
+				static_box(Vector3(c.x, y + 0.45, c.y), Vector3(1.9, 0.9, 0.9))
+			"chest":
+				chests.append(Vector3(c.x, y, c.y))
+			"kitchen":
+				_solid(Vector3(c.x, y + 0.45, c.y), Vector3(1.6, 0.9, 0.6), Color("#E9EEF2"))
+				_deco(Vector3(c.x, y + 0.92, c.y), Vector3(1.65, 0.05, 0.65), Color("#5C6B73"), 0.3)
+				_deco(Vector3(c.x - 0.4, y + 0.95, c.y), Vector3(0.4, 0.04, 0.3), Color("#8D99AE"), 0.2)
+			"plant":
+				cyl(Vector3(c.x, y + 0.25, c.y), 0.25, 0.5, Color("#B5651D"), true, 12)
+				var sp := SphereMesh.new()
+				sp.radius = 0.45
+				sp.height = 0.9
+				mesh_node(sp, mat(Color("#4FA83D"), 0.9), Vector3(c.x, y + 0.85, c.y))
+	# стол со стульями и ковёр
+	var cc := r.get_center()
+	if r.size.x > 4.5 and r.size.y > 3.5:
+		_deco(Vector3(cc.x, y + 0.03, cc.y), Vector3(minf(r.size.x * 0.5, 3.2), 0.02, minf(r.size.y * 0.5, 2.2)), fab.lightened(0.15), 0.95)
+		_deco(Vector3(cc.x, y + 0.76, cc.y), Vector3(1.5, 0.08, 0.85), wood.lightened(0.1), 0.6)
+		for lx in [-0.65, 0.65]:
+			for lz in [-0.35, 0.35]:
+				_deco(Vector3(cc.x + lx, y + 0.37, cc.y + lz), Vector3(0.08, 0.74, 0.08), wood, 0.6)
+		static_box(Vector3(cc.x, y + 0.4, cc.y), Vector3(1.5, 0.8, 0.85))
+		for sx in [-1.15, 1.15]:
+			_deco(Vector3(cc.x + sx, y + 0.24, cc.y), Vector3(0.45, 0.48, 0.45), wood.darkened(0.1), 0.7)
+			_deco(Vector3(cc.x + sx * 1.18, y + 0.75, cc.y), Vector3(0.08, 0.6, 0.45), wood.darkened(0.1), 0.7)
 
 func crates(x: float, z: float, y: float, n: int) -> void:
 	for i in n:
@@ -494,7 +636,7 @@ func _build_town(t: Dictionary) -> void:
 				var z := tz + sin(a) * rr
 				var w := randf_range(7, 12 if t.kind == "city" else 9.5)
 				var d := randf_range(6, 8.5)
-				var h := randf_range(6.5, 9) if (t.kind == "city" and randf() < 0.4) else randf_range(3.6, 4.8)
+				var h := randf_range(4.4, 5.2) if (t.kind == "city" and randf() < 0.4) else randf_range(3.4, 3.9)
 				var rot := randf() < 0.5
 				if not is_free(x, z, d if rot else w, w if rot else d, 3.2):
 					continue
@@ -529,7 +671,7 @@ func _build_wild() -> void:
 			continue
 		var r2 := randf()
 		if r2 < 0.4 and is_free(x, z, 9, 9, 3):
-			house(x, z, h - 0.3, randf_range(6, 8), randf_range(5, 7), randf_range(3.4, 4.2), randf() < 0.5)
+			house(x, z, h - 0.3, randf_range(6, 8), randf_range(5, 7), randf_range(3.3, 3.7), randf() < 0.5)
 		elif r2 < 0.7:
 			crates(x, z, h - 0.1, 3)
 		else:
