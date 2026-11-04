@@ -1,0 +1,7 @@
+{
+    "name": "TankGame.Combat",
+    "rootNamespace": "TankGame.Combat",
+    "references": [],
+    "autoReferenced": true,
+    "allowUnsafeCode": false
+}
