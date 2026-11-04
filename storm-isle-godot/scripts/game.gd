@@ -82,8 +82,9 @@ func _ready() -> void:
 	is_touch = DisplayServer.is_touchscreen_available() or OS.has_feature("mobile") or "--touch" in OS.get_cmdline_user_args()
 	autotest = "--autotest" in OS.get_cmdline_user_args()
 	cfg.load_cfg(is_touch)
-	font_display = load("res://fonts/RussoOne-Regular.ttf")
+	font_display = _pixel_font("res://fonts/PixelifySans-Bold.ttf")
 	font_body = load("res://fonts/Rubik-Medium.ttf")
+	get_tree().node_added.connect(_toonify)
 	_setup_buses()
 	_show_loading()
 	await _step(0.05, "Поднимаем остров из океана…")
@@ -140,6 +141,24 @@ func _ready() -> void:
 		jump_from(player)
 	else:
 		to_menu()
+
+func _pixel_font(path: String) -> Font:
+	var f: FontFile = load(path)
+	f.antialiasing = TextServer.FONT_ANTIALIASING_NONE
+	f.hinting = TextServer.HINTING_NONE
+	f.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
+	return f
+
+## Каждый новый объект — «мультяшный» свет ступеньками без бликов (основа пиксель-арта)
+func _toonify(n: Node) -> void:
+	if n is GeometryInstance3D:
+		var m = n.material_override
+		if m == null and n is MeshInstance3D and n.mesh != null and n.mesh.get_surface_count() > 0:
+			m = n.mesh.surface_get_material(0)
+		if m is StandardMaterial3D and m.shading_mode != BaseMaterial3D.SHADING_MODE_UNSHADED:
+			m.diffuse_mode = BaseMaterial3D.DIFFUSE_TOON
+			m.specular_mode = BaseMaterial3D.SPECULAR_TOON
+			m.rim_enabled = false
 
 # ------------------------------------------------------------------ экран загрузки
 func _show_loading() -> void:
@@ -236,12 +255,15 @@ func _setup_view() -> void:
 func _resize_view() -> void:
 	if view == null:
 		return
-	var px: int = maxi(1, int(cfg.v.pixel))
+	# высота картинки в «пикселях»: Выкл / 300 / 220 / 160
+	var lvl: int = int(cfg.v.pixel)
 	var ws := DisplayServer.window_get_size()
-	var sz := Vector2i(maxi(64, ws.x / px), maxi(64, ws.y / px))
+	var target: int = [0, 0, 300, 220, 160][clampi(lvl, 0, 4)]
+	var px: float = 1.0 if target == 0 else maxf(1.0, float(ws.y) / target)
+	var sz := Vector2i(maxi(64, int(ws.x / px)), maxi(64, int(ws.y / px)))
 	view.size = sz
 	screen_mat.set_shader_parameter("px", Vector2(1.0 / sz.x, 1.0 / sz.y))
-	screen_mat.set_shader_parameter("retro", bool(cfg.v.retro) and px > 1)
+	screen_mat.set_shader_parameter("retro", bool(cfg.v.retro) and px > 1.0)
 
 func _setup_buses() -> void:
 	for n in ["Music", "SFX"]:
@@ -283,7 +305,7 @@ func _pick_lobby() -> void:
 		var z := sin(a) * r
 		var h := world.height_at(x, z)
 		var sl := absf(world.height_at(x + 3, z) - world.height_at(x - 3, z)) + absf(world.height_at(x, z + 3) - world.height_at(x, z - 3))
-		if h > 1.6 and h < 7.0 and sl < 1.6 and world.town_at(x, z, 1.3) == null and world.is_free(x, z, 4, 4, 9):
+		if h > 1.6 and h < 7.0 and sl < 1.6 and world.town_at(x, z, 1.3) == null and world.is_free(x, z, 4, 4, 9) and world.clear_of_trees(x, z, 9.0):
 			lobby_pos = Vector3(x, ground_y(x, z, 40.0), z)
 			lobby_yaw = atan2(x, z)   # лицом к морю
 			return

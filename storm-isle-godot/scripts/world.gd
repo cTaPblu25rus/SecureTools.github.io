@@ -99,8 +99,75 @@ func town_at(x: float, z: float, mul := 1.0):
 	return null
 
 # ------------------------------------------------------------------ материалы
-func mat(c: Color, rough := 0.8, metal := 0.0, emis := 0.0) -> StandardMaterial3D:
-	var key := "%s|%.2f|%.2f|%.2f" % [c.to_html(), rough, metal, emis]
+var patterns := {}
+var tree_pos: Array = []
+
+func clear_of_trees(x: float, z: float, r: float) -> bool:
+	for t in tree_pos:
+		if (t as Vector2).distance_squared_to(Vector2(x, z)) < r * r:
+			return false
+	return true
+var cur_pat := ""
+
+## Пиксельные текстуры 16×16 в оттенках серого — цвет задаёт материал
+func pattern(kind: String) -> ImageTexture:
+	if patterns.has(kind):
+		return patterns[kind]
+	var N := 16
+	var img := Image.create(N, N, false, Image.FORMAT_RGB8)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(kind)
+	for y in N:
+		for x in N:
+			var v := 0.94
+			match kind:
+				"brick":
+					var row := y / 4
+					var off := 4 if row % 2 else 0
+					var bx := (x + off) / 8
+					if y % 4 == 3 or (x + off) % 8 == 7:
+						v = 0.62
+					else:
+						v = 0.88 + fmod(float(bx * 7 + row * 13) * 0.37, 1.0) * 0.12
+				"plank":
+					if y % 4 == 3:
+						v = 0.6
+					elif (x + (y / 4) * 5) % 16 == 0:
+						v = 0.7
+					else:
+						v = 0.86 + (0.08 if (x * 3 + y) % 7 == 0 else 0.0)
+				"shingle":
+					var row := y / 4
+					var off := 2 if row % 2 else 0
+					if y % 4 == 3 or ((x + off) % 4 == 0 and y % 4 >= 2):
+						v = 0.58
+					else:
+						v = 0.84 + float(y % 4) * 0.04
+				"stone":
+					var cx := (x + (y / 5) * 3) / 6
+					if y % 5 == 4 or (x + (y / 5) * 3) % 6 == 5:
+						v = 0.6
+					else:
+						v = 0.8 + fmod(float(cx * 11 + (y / 5) * 5) * 0.61, 1.0) * 0.16
+				"metal":
+					v = 0.95 if x % 4 < 2 else 0.74
+					if y == 0:
+						v = 0.6
+				"tile":
+					v = 0.95 if ((x / 8) + (y / 8)) % 2 == 0 else 0.8
+					if x % 8 == 0 or y % 8 == 0:
+						v = 0.65
+				"plaster":
+					v = 0.95
+			if rng.randf() < 0.08:
+				v -= 0.06
+			img.set_pixel(x, y, Color(v, v, v))
+	var t := ImageTexture.create_from_image(img)
+	patterns[kind] = t
+	return t
+
+func mat(c: Color, rough := 0.8, metal := 0.0, emis := 0.0, pat := "") -> StandardMaterial3D:
+	var key := "%s|%.2f|%.2f|%.2f|%s" % [c.to_html(), rough, metal, emis, pat]
 	if mats.has(key):
 		return mats[key]
 	var m := StandardMaterial3D.new()
@@ -111,6 +178,12 @@ func mat(c: Color, rough := 0.8, metal := 0.0, emis := 0.0) -> StandardMaterial3
 		m.emission_enabled = true
 		m.emission = c
 		m.emission_energy_multiplier = emis
+	if pat != "":
+		m.albedo_texture = pattern(pat)
+		m.uv1_triplanar = true
+		m.uv1_world_triplanar = true
+		m.uv1_scale = Vector3.ONE * 1.5
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
 	mats[key] = m
 	return m
 
@@ -148,21 +221,21 @@ func static_cyl(center: Vector3, r: float, h: float) -> void:
 	b.position = center
 	add_child(b)
 
-func box(pos: Vector3, size: Vector3, c: Color, collide := true, emis := 0.0, rough := 0.8) -> void:
+func box(pos: Vector3, size: Vector3, c: Color, collide := true, emis := 0.0, rough := 0.8, pat := "") -> void:
 	var bm := BoxMesh.new()
 	bm.size = size
-	mesh_node(bm, mat(c, rough, 0.0, emis), pos, null, emis == 0.0)
+	mesh_node(bm, mat(c, rough, 0.0, emis, pat), pos, null, emis == 0.0)
 	if collide:
 		static_box(pos, size)
 		footprints.append(Rect2(pos.x - size.x / 2.0, pos.z - size.z / 2.0, size.x, size.z))
 
-func cyl(pos: Vector3, r: float, h: float, c: Color, collide := true, seg := 24, rough := 0.6, metal := 0.0, emis := 0.0) -> void:
+func cyl(pos: Vector3, r: float, h: float, c: Color, collide := true, seg := 24, rough := 0.6, metal := 0.0, emis := 0.0, pat := "") -> void:
 	var cm := CylinderMesh.new()
 	cm.top_radius = r
 	cm.bottom_radius = r
 	cm.height = h
 	cm.radial_segments = seg
-	mesh_node(cm, mat(c, rough, metal, emis), pos)
+	mesh_node(cm, mat(c, rough, metal, emis, pat), pos)
 	if collide:
 		static_cyl(pos, r, h)
 		footprints.append(Rect2(pos.x - r, pos.z - r, r * 2.0, r * 2.0))
@@ -343,16 +416,16 @@ var interior_spots: Array = []   # {"pos", "via", "rect"} — лут внутр�
 var chests: Array = []           # Vector3 — сундуки с несколькими предметами
 var lamps: Array = []
 
-func _solid(pos: Vector3, size: Vector3, c: Color, rough := 0.85) -> void:
+func _solid(pos: Vector3, size: Vector3, c: Color, rough := 0.85, pat := "") -> void:
 	var bm := BoxMesh.new()
 	bm.size = size
-	mesh_node(bm, mat(c, rough), pos)
+	mesh_node(bm, mat(c, rough, 0.0, 0.0, pat), pos)
 	static_box(pos, size)
 
-func _deco(pos: Vector3, size: Vector3, c: Color, rough := 0.8, emis := 0.0) -> MeshInstance3D:
+func _deco(pos: Vector3, size: Vector3, c: Color, rough := 0.8, emis := 0.0, pat := "") -> MeshInstance3D:
 	var bm := BoxMesh.new()
 	bm.size = size
-	return mesh_node(bm, mat(c, rough, 0.0, emis), pos, null, emis == 0.0)
+	return mesh_node(bm, mat(c, rough, 0.0, emis, pat), pos, null, emis == 0.0)
 
 func _wall_piece(along_x: bool, s0: float, s1: float, c: float, y: float, h: float, t: float, col: Color) -> void:
 	var ln := s1 - s0
@@ -360,9 +433,9 @@ func _wall_piece(along_x: bool, s0: float, s1: float, c: float, y: float, h: flo
 		return
 	var mid := (s0 + s1) / 2.0
 	if along_x:
-		_solid(Vector3(mid, y + h / 2.0, c), Vector3(ln, h, t), col)
+		_solid(Vector3(mid, y + h / 2.0, c), Vector3(ln, h, t), col, 0.85, cur_pat)
 	else:
-		_solid(Vector3(c, y + h / 2.0, mid), Vector3(t, h, ln), col)
+		_solid(Vector3(c, y + h / 2.0, mid), Vector3(t, h, ln), col, 0.85, cur_pat)
 
 ## Стена с проёмами: openings = [[центр, ширина, низ, верх], ...]
 func _wall(along_x: bool, a0: float, a1: float, c: float, y: float, h: float, t: float, col: Color, openings: Array) -> void:
@@ -390,9 +463,10 @@ func house(x: float, z: float, y: float, w: float, d: float, h: float, rot: bool
 	var roof := Color(ROOFS.pick_random())
 	var t := 0.28
 	footprints.append(Rect2(x - w / 2.0, z - d / 2.0, w, d))
-	_solid(Vector3(x, y - 0.2, z), Vector3(w + 0.4, 0.6, d + 0.4), Color("#8C8279"))
+	cur_pat = ["brick", "plank", "plaster", "brick"].pick_random()
+	_solid(Vector3(x, y - 0.2, z), Vector3(w + 0.4, 0.6, d + 0.4), Color("#8C8279"), 0.9, "stone")
 	var fy := y + 0.1
-	_deco(Vector3(x, fy + 0.012, z), Vector3(w - t * 2.0, 0.02, d - t * 2.0), Color(FLOORS.pick_random()), 0.6)
+	_deco(Vector3(x, fy + 0.012, z), Vector3(w - t * 2.0, 0.02, d - t * 2.0), Color(FLOORS.pick_random()), 0.6, 0.0, ["plank", "tile"].pick_random())
 	var door_side := randi() % 4
 	var dirs := [Vector2(0, -1), Vector2(0, 1), Vector2(-1, 0), Vector2(1, 0)]
 	for side in 4:
@@ -416,12 +490,12 @@ func house(x: float, z: float, y: float, w: float, d: float, h: float, rot: bool
 				ops.append([base + (k - (n - 1) / 2.0) * length * 0.42, 1.3, 1.05, 2.2])
 		_wall(along_x, base - length / 2.0, base + length / 2.0, c, fy, h, t, wall, ops)
 	# потолок и крыша
-	_solid(Vector3(x, fy + h + 0.1, z), Vector3(w + 0.3, 0.2, d + 0.3), wall.darkened(0.2))
+	_solid(Vector3(x, fy + h + 0.1, z), Vector3(w + 0.3, 0.2, d + 0.3), wall.darkened(0.2), 0.85, "plank")
 	var pm := PrismMesh.new()
 	var rh := minf(w, d) * 0.42
 	var long_x := w >= d
 	pm.size = Vector3((d if long_x else w) + 0.9, rh, (w if long_x else d) + 0.9)
-	var r := mesh_node(pm, mat(roof, 0.7), Vector3(x, fy + h + 0.2 + rh / 2.0, z))
+	var r := mesh_node(pm, mat(roof, 0.7, 0.0, 0.0, "shingle"), Vector3(x, fy + h + 0.2 + rh / 2.0, z))
 	if long_x:
 		r.rotation.y = PI / 2.0
 	var dn: Vector2 = dirs[door_side]
@@ -467,12 +541,12 @@ func _furnish(r: Rect2, y: float, door_side: int, h: float) -> void:
 		ki += 1
 		match k:
 			"bed":
-				_solid(Vector3(c.x, y + 0.25, c.y), Vector3(1.9, 0.5, 1.1), wood)
+				_solid(Vector3(c.x, y + 0.25, c.y), Vector3(1.9, 0.5, 1.1), wood, 0.85, "plank")
 				_deco(Vector3(c.x, y + 0.56, c.y), Vector3(1.8, 0.14, 1.0), Color("#F4F1EA"), 0.9)
 				_deco(Vector3(c.x + 0.6, y + 0.68, c.y), Vector3(0.4, 0.12, 0.8), Color("#FFFFFF"), 0.9)
 				_deco(Vector3(c.x - 0.25, y + 0.64, c.y), Vector3(1.0, 0.04, 1.02), fab, 0.9)
 			"shelf":
-				_solid(Vector3(c.x, y + 0.95, c.y), Vector3(1.4, 1.9, 0.45), wood)
+				_solid(Vector3(c.x, y + 0.95, c.y), Vector3(1.4, 1.9, 0.45), wood, 0.85, "plank")
 				for sh in 3:
 					for b in 5:
 						if randf() < 0.75:
@@ -502,7 +576,7 @@ func _furnish(r: Rect2, y: float, door_side: int, h: float) -> void:
 	var cc := r.get_center()
 	if r.size.x > 4.5 and r.size.y > 3.5:
 		_deco(Vector3(cc.x, y + 0.03, cc.y), Vector3(minf(r.size.x * 0.5, 3.2), 0.02, minf(r.size.y * 0.5, 2.2)), fab.lightened(0.15), 0.95)
-		_deco(Vector3(cc.x, y + 0.76, cc.y), Vector3(1.5, 0.08, 0.85), wood.lightened(0.1), 0.6)
+		_deco(Vector3(cc.x, y + 0.76, cc.y), Vector3(1.5, 0.08, 0.85), wood.lightened(0.1), 0.6, 0.0, "plank")
 		for lx in [-0.65, 0.65]:
 			for lz in [-0.35, 0.35]:
 				_deco(Vector3(cc.x + lx, y + 0.37, cc.y + lz), Vector3(0.08, 0.74, 0.08), wood, 0.6)
@@ -519,7 +593,7 @@ func crates(x: float, z: float, y: float, n: int) -> void:
 			continue
 		var stack := 2 if randf() < 0.35 else 1
 		for s in stack:
-			box(Vector3(cx, y + 0.65 + s * 1.3, cz), Vector3(1.3, 1.3, 1.3), Color("#B5835A") if s else Color("#A8754C"), true, 0.0, 0.9)
+			box(Vector3(cx, y + 0.65 + s * 1.3, cz), Vector3(1.3, 1.3, 1.3), Color("#B5835A") if s else Color("#A8754C"), true, 0.0, 0.9, "plank")
 		loot_spots.append(Vector3(cx, y + stack * 1.3, cz))
 
 func container(x: float, z: float, y: float, rot: bool, stack: int) -> void:
@@ -532,7 +606,7 @@ func container(x: float, z: float, y: float, rot: bool, stack: int) -> void:
 		return
 	for s in stack:
 		var c := Color(CONT.pick_random())
-		box(Vector3(x, y + 1.3 + s * 2.6, z), Vector3(w, 2.6, d), c, true, 0.0, 0.5)
+		box(Vector3(x, y + 1.3 + s * 2.6, z), Vector3(w, 2.6, d), c, true, 0.0, 0.5, "metal")
 		box(Vector3(x, y + 0.35 + s * 2.6, z), Vector3(w + 0.05, 0.12, d + 0.05), c.darkened(0.4), false)
 		box(Vector3(x, y + 2.3 + s * 2.6, z), Vector3(w + 0.05, 0.12, d + 0.05), c.darkened(0.4), false)
 	loot_spots.append(Vector3(x, y + stack * 2.6, z))
@@ -576,11 +650,11 @@ func _build_town(t: Dictionary) -> void:
 				for seg in [-1, 1]:
 					var ln := s - 3.0
 					if f.x == 0:
-						box(Vector3(tx + seg * (ln / 2.0 + 2.5), y + 1.7, tz + f.y * s), Vector3(ln, 3.4, 1.4), stone)
+						box(Vector3(tx + seg * (ln / 2.0 + 2.5), y + 1.7, tz + f.y * s), Vector3(ln, 3.4, 1.4), stone, true, 0.0, 0.9, "stone")
 					else:
-						box(Vector3(tx + f.x * s, y + 1.7, tz + seg * (ln / 2.0 + 2.5)), Vector3(1.4, 3.4, ln), stone)
+						box(Vector3(tx + f.x * s, y + 1.7, tz + seg * (ln / 2.0 + 2.5)), Vector3(1.4, 3.4, ln), stone, true, 0.0, 0.9, "stone")
 			for c in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
-				cyl(Vector3(tx + c.x * s, y + 3.25, tz + c.y * s), 2.4, 6.5, Color("#8A8178"), true, 20, 0.95)
+				cyl(Vector3(tx + c.x * s, y + 3.25, tz + c.y * s), 2.4, 6.5, Color("#8A8178"), true, 20, 0.95, 0.0, 0.0, "stone")
 				var cone := CylinderMesh.new()
 				cone.top_radius = 0.0
 				cone.bottom_radius = 2.9
@@ -654,7 +728,7 @@ func _build_town(t: Dictionary) -> void:
 					var px := tx + cos(a) * (tr + 4)
 					var pz := tz + sin(a) * (tr + 4)
 					if height_at(px, pz) < 0.5:
-						box(Vector3(px, -0.05, pz), Vector3(3, 0.5, 9), Color("#8B6B4A"))
+						box(Vector3(px, -0.05, pz), Vector3(3, 0.5, 9), Color("#8B6B4A"), true, 0.0, 0.9, "plank")
 			add_pad(tx + randf_range(-6, 6), tz + randf_range(-6, 6))
 
 func _build_wild() -> void:
@@ -805,6 +879,7 @@ func _build_nature() -> void:
 				palms.append(Transform3D(Basis(Vector3.UP, rot).scaled(Vector3(s, s, s)), top))
 				palm_c.append(Color(["#5DBB46", "#4CA03A", "#79C653"].pick_random()))
 		static_cyl(Vector3(x, h + 3.0, z), 0.4 * s, 6.0)
+		tree_pos.append(Vector2(x, z))
 		count += 1
 	var trunk := CylinderMesh.new()
 	trunk.top_radius = 0.16

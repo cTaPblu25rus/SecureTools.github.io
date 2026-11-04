@@ -1,6 +1,6 @@
 shader_type spatial;
-render_mode cull_disabled;
-// Трава: качается на ветру, к кончику светлее.
+render_mode cull_disabled, diffuse_toon, specular_disabled;
+// Трава: качается на ветру, кончик светлее.
 varying float tip;
 
 void vertex() {
@@ -12,7 +12,6 @@ void vertex() {
 }
 
 void fragment() {
-	ALBEDO = COLOR.rgb * mix(0.65, 1.15, tip);
-	ROUGHNESS = 0.9;
-	SPECULAR = 0.1;
+	ALBEDO = COLOR.rgb * (tip > 0.6 ? 1.15 : 0.85);
+	ROUGHNESS = 1.0;
 }

@@ -82,7 +82,14 @@ func setup(g) -> void:
 func _style(bg: Color, rad := 14, border := Color(0, 0, 0, 0)) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
-	sb.set_corner_radius_all(rad)
+	sb.set_corner_radius_all(0)
+	sb.anti_aliasing = false
+	sb.shadow_color = Color(0, 0, 0, 0.45)
+	sb.shadow_size = 1
+	sb.shadow_offset = Vector2(4, 4)
+	if border.a <= 0.0:
+		border = bg.darkened(0.45)
+		border.a = maxf(bg.a, 0.6)
 	sb.content_margin_left = 20
 	sb.content_margin_right = 20
 	sb.content_margin_top = 10
@@ -333,8 +340,8 @@ func _fill_settings() -> void:
 	match settings_tab:
 		0:
 			_row("Качество", "Тени, трава, свет в домах", _seg("quality", ["Низкое", "Среднее", "Высокое"], [0, 1, 2]))
-			_row("Пиксельность", "Крупнее пиксели — ретро-вид и выше FPS", _seg("pixel", ["Выкл", "×2", "×3", "×4"], [1, 2, 3, 4]))
-			_row("Ретро-фильтр", "Контуры, палитра и дизеринг", _toggle("retro"))
+			_row("Пиксели", "Крупнее пиксели — сильнее пиксель-арт и выше FPS", _seg("pixel", ["Выкл", "Мелкие", "Средние", "Крупные"], [1, 2, 3, 4]))
+			_row("Палитра 32 цвета", "Контуры, ограниченная палитра и дизеринг", _toggle("retro"))
 			_row("Частота кадров", "", _seg("fps", ["30", "60"], [30, 60]))
 			_row("Показывать FPS", "", _toggle("show_fps"))
 		1:
@@ -739,7 +746,8 @@ class HudCanvas extends Control:
 	func _rrect(r: Rect2, c: Color, rad := 10.0, border := Color(0, 0, 0, 0), bw := 2.0) -> void:
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = c
-		sb.set_corner_radius_all(int(rad))
+		sb.set_corner_radius_all(0)
+		sb.anti_aliasing = false
 		if border.a > 0.0:
 			sb.border_color = border
 			sb.set_border_width_all(int(bw))

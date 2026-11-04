@@ -1,34 +1,61 @@
 shader_type canvas_item;
-// Пиксель-арт фильтр: 3D рисуется в низком разрешении, здесь — контуры,
-// ограниченная палитра с дизерингом Байера и лёгкое усиление цвета.
+// Настоящий пиксель-арт: картинка 3D уже отрисована в низком разрешении (~220 px по высоте),
+// здесь каждый пиксель приводится к палитре из 32 цветов (Endesga 32) с упорядоченным
+// дизерингом Байера, а по перепадам яркости рисуется тёмный контур в 1 пиксель.
 uniform bool retro = true;
-uniform vec2 px = vec2(0.003, 0.005);   // размер одного «пикселя» в UV
-uniform float levels = 18.0;
-uniform float outline = 0.65;
+uniform vec2 px = vec2(0.003, 0.005);
+uniform float outline = 1.0;
+uniform float dither = 0.42;
 
-const float bayer[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+const vec3 PAL[32] = vec3[32](
+	vec3(0.745, 0.290, 0.184), vec3(0.843, 0.463, 0.263), vec3(0.918, 0.831, 0.667), vec3(0.894, 0.651, 0.447),
+	vec3(0.722, 0.435, 0.314), vec3(0.451, 0.243, 0.224), vec3(0.243, 0.153, 0.192), vec3(0.635, 0.149, 0.200),
+	vec3(0.894, 0.231, 0.267), vec3(0.969, 0.463, 0.133), vec3(0.996, 0.682, 0.204), vec3(0.996, 0.906, 0.380),
+	vec3(0.388, 0.780, 0.302), vec3(0.243, 0.537, 0.282), vec3(0.149, 0.361, 0.259), vec3(0.098, 0.235, 0.243),
+	vec3(0.071, 0.306, 0.537), vec3(0.000, 0.600, 0.859), vec3(0.173, 0.910, 0.961), vec3(1.000, 1.000, 1.000),
+	vec3(0.753, 0.796, 0.863), vec3(0.545, 0.608, 0.706), vec3(0.353, 0.412, 0.533), vec3(0.227, 0.267, 0.400),
+	vec3(0.149, 0.169, 0.267), vec3(0.094, 0.078, 0.145), vec3(1.000, 0.000, 0.267), vec3(0.408, 0.220, 0.424),
+	vec3(0.710, 0.314, 0.533), vec3(0.965, 0.459, 0.478), vec3(0.910, 0.718, 0.588), vec3(0.761, 0.522, 0.412)
+);
+const float BAYER[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
 
 float lum(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+
+// расстояние с учётом восприятия (зелёный важнее)
+float cdist(vec3 a, vec3 b) { vec3 d = a - b; return dot(d * d, vec3(0.3, 0.59, 0.11)); }
 
 void fragment() {
 	vec3 c = texture(TEXTURE, UV).rgb;
 	if (retro) {
 		float l = lum(c);
-		float lr = lum(texture(TEXTURE, UV + vec2(px.x, 0.0)).rgb);
-		float ld = lum(texture(TEXTURE, UV + vec2(0.0, px.y)).rgb);
-		float ll = lum(texture(TEXTURE, UV - vec2(px.x, 0.0)).rgb);
-		float lu = lum(texture(TEXTURE, UV - vec2(0.0, px.y)).rgb);
-		// тёмный контур только с «внешней», более светлой стороны перепада
-		float e = max(max(lr - l, ld - l), max(ll - l, lu - l));
-		c *= 1.0 - smoothstep(0.07, 0.22, e) * outline;
-		// насыщенность
+		float e = 0.0;
+		e = max(e, lum(texture(TEXTURE, UV + vec2(px.x, 0.0)).rgb) - l);
+		e = max(e, lum(texture(TEXTURE, UV - vec2(px.x, 0.0)).rgb) - l);
+		e = max(e, lum(texture(TEXTURE, UV + vec2(0.0, px.y)).rgb) - l);
+		e = max(e, lum(texture(TEXTURE, UV - vec2(0.0, px.y)).rgb) - l);
+		// контур: тёмная сторона резкого перепада
+		if (e > 0.16 * (1.0 / max(outline, 0.01))) {
+			c *= 0.45;
+		}
+		// чуть сочнее перед квантованием
 		float g = lum(c);
-		c = mix(vec3(g), c, 1.18);
-		// палитра + дизеринг
+		c = clamp(mix(vec3(g), c, 1.25), 0.0, 1.0);
+		// два ближайших цвета палитры
+		float d1 = 99.0;
+		float d2 = 99.0;
+		vec3 c1 = PAL[0];
+		vec3 c2 = PAL[0];
+		for (int i = 0; i < 32; i++) {
+			float d = cdist(c, PAL[i]);
+			if (d < d1) { d2 = d1; c2 = c1; d1 = d; c1 = PAL[i]; }
+			else if (d < d2) { d2 = d; c2 = PAL[i]; }
+		}
+		// дизеринг между ними, если цвет посередине
 		ivec2 p = ivec2(floor(UV / px));
-		int i = (p.x % 4) + (p.y % 4) * 4;
-		float b = bayer[i] / 16.0 - 0.5;
-		c = floor(c * levels + b * 0.85 + 0.5) / levels;
+		float th = BAYER[(p.x & 3) + (p.y & 3) * 4] / 16.0;
+		float mixk = d1 / max(d1 + d2, 1e-5);   // 0..0.5
+		// дизерим только «спорные» оттенки, чистые цвета остаются чистыми
+		c = (mixk > 0.3 && mixk * 2.0 * dither > th + 0.08) ? c2 : c1;
 	}
 	COLOR = vec4(c, 1.0);
 }

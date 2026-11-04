@@ -20,7 +20,7 @@ var best := {"wins": 0, "place": 0, "kills": 0, "matches": 0}
 func load_cfg(is_touch: bool) -> void:
 	if not is_touch:
 		v.quality = 2
-		v.pixel = 2
+		v.pixel = 3
 	var c := ConfigFile.new()
 	if c.load(PATH) != OK:
 		return

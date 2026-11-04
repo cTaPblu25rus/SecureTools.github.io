@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode cull_disabled, specular_schlick_ggx;
+render_mode cull_disabled, diffuse_toon, specular_toon;
 // Вода: волны в вершинах, бирюзовая лагуна у берега, френель и блики.
 uniform vec3 deep : source_color = vec3(0.0, 0.17, 0.36);
 uniform vec3 shallow : source_color = vec3(0.1, 0.72, 0.78);
@@ -26,8 +26,10 @@ void fragment() {
 	float sh = 1.0 - smoothstep(125.0, 205.0, d);
 	float fres = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 4.0);
 	vec3 c = mix(deep, shallow, sh * 0.85);
-	float sparkle = pow(max(sin(wpos.x * 0.9 + TIME * 2.0) * sin(wpos.z * 0.8 - TIME * 1.7), 0.0), 40.0);
-	ALBEDO = c + sparkle * 0.12;
+	vec2 cell = floor(wpos.xz * 2.0) / 2.0;
+	float sparkle = step(0.985, sin(cell.x * 0.9 + TIME * 2.0) * sin(cell.y * 0.8 - TIME * 1.7));
+	float foam = step(0.992, fract(sin(dot(cell, vec2(12.9898, 78.233))) * 43758.5453 + TIME * 0.05)) * sh;
+	ALBEDO = c + sparkle * 0.35 + foam * 0.25;
 	ROUGHNESS = 0.14;
 	METALLIC = 0.0;
 	SPECULAR = 0.35;
